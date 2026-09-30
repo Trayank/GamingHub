@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+
+{% block title %}Tic-Tac-Toe Match: {{ room.code }} - GamingHub{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Game Header Navigation -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-bold flex items-center justify-center text-xl">
+                <i class="fa-solid fa-chess-board"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold text-white">Tic-Tac-Toe</h1>
+                <p class="text-xs text-slate-400">Room Code: <span class="font-mono text-indigo-400 font-bold">{{ room.code }}</span></p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'rooms:room_detail' room_code=room.code %}" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
+                <i class="fa-solid fa-arrow-left mr-1"></i> Return to Lobby
+            </a>
+        </div>
+    </div>
+
+    <!-- Live Turn Banner Indicator -->
+    <div id="turn-banner" class="p-4 rounded-2xl border text-center transition shadow-lg bg-indigo-600/10 border-indigo-500/30 text-indigo-300">
+        <div class="flex items-center justify-center space-x-2 text-sm font-extrabold">
+            <div id="turn-spinner" class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping mr-1"></div>
+            <span id="turn-text">Connecting to Live Game Engine...</span>
+        </div>
+    </div>
+
+    <!-- Main Game Board Grid Container -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[460px]">
+        <!-- 3x3 Grid -->
+        <div id="grid-3x3" class="grid grid-cols-3 gap-3.5 w-72 sm:w-80 h-72 sm:h-80 p-3.5 bg-slate-950 rounded-3xl border border-slate-800/90 shadow-inner">
+            {% for i in "012345678" %}
+                <button 
+                    onclick="sendMove({{ forloop.counter0 }})" 
+                    id="cell-{{ forloop.counter0 }}" 
+                    class="ttt-cell bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl text-4xl sm:text-5xl font-black text-white flex items-center justify-center transition active:scale-95 focus:outline-none disabled:cursor-not-allowed" 
+                    data-index="{{ forloop.counter0 }}">
+                </button>
+            {% endfor %}
+        </div>
+
+        <!-- Symbol & Player Badge -->
+        <div class="mt-6 flex items-center space-x-6 text-xs font-medium text-slate-400">
+            <div>Playing as: <strong class="text-white">{{ current_username }}</strong></div>
+            <div class="h-4 border-r border-slate-800"></div>
+            <div>Your Mark: <strong id="your-symbol" class="text-indigo-400 font-bold text-sm">-</strong></div>
+        </div>
+    </div>
+</div>
+
+<!-- Victory / Defeat / Draw Overlay Modal (Hidden by Default) -->
+<div id="game-over-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full text-center space-y-6 shadow-2xl animate-fade-in">
+        <div id="modal-icon-container" class="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl mx-auto">
+            <i id="modal-icon" class="fa-solid fa-trophy"></i>
+        </div>
+
+        <div>
+            <h2 id="modal-title" class="text-2xl font-black text-white tracking-tight">VICTORY!</h2>
+            <p id="modal-subtitle" class="text-xs text-slate-400 mt-1">You won the match!</p>
+        </div>
+
+        <div class="space-y-3 pt-2">
+            <button onclick="restartMatch()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Play Again</span>
+            </button>
+            <a href="{% url 'rooms:room_detail' room_code=room.code %}" class="w-full inline-block py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+                Return to Lobby
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const roomCode = "{{ room.code }}";
+    const currentUsername = "{{ current_username }}";
+    let gameSocket = null;
+    let currentGameState = null;
+    let isMyTurn = false;
+
+    function initGameWebSocket() {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${wsProtocol}${window.location.host}/ws/game/${roomCode}/`;
+
+        gameSocket = new WebSocket(wsUrl);
+
+        gameSocket.onopen = function() {
+            console.log("[GameWS] Connected to live game engine.");
+        };
+
+        gameSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            console.log("[GameWS] Message:", data);
+
+            if (data.type === 'game_state_update') {
+                renderGameState(data.state);
+            } else if (data.type === 'invalid_move') {
+                alert(data.message || 'Invalid move!');
+            }
+        };
+
+        gameSocket.onclose = function() {
+            console.warn("[GameWS] Disconnected. Reconnecting in 3s...");
+            setTimeout(initGameWebSocket, 3000);
+        };
+    }
+
+    function renderGameState(state) {
+        if (!state) return;
+        currentGameState = state;
+
+        const board = state.board || ["", "", "", "", "", "", "", "", ""];
+        const currentTurn = state.current_turn;
+        const yourSymbol = state.your_symbol || "";
+        const isOver = state.is_over;
+        const winner = state.winner;
+        const winningLine = state.winning_line;
+
+        // Symbol update
+        document.getElementById('your-symbol').innerText = yourSymbol || '-';
+
+        // Render 3x3 Board
+        board.forEach((symbol, idx) => {
+            const btn = document.getElementById(`cell-${idx}`);
+            if (!btn) return;
+
+            btn.innerText = symbol;
+            
+            // Color symbols
+            if (symbol === 'X') {
+                btn.className = "ttt-cell bg-slate-900 border border-indigo-500/40 text-indigo-400 rounded-2xl text-4xl sm:text-5xl font-black flex items-center justify-center transition";
+            } else if (symbol === 'O') {
+                btn.className = "ttt-cell bg-slate-900 border border-purple-500/40 text-purple-400 rounded-2xl text-4xl sm:text-5xl font-black flex items-center justify-center transition";
+            } else {
+                btn.className = "ttt-cell bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl text-4xl sm:text-5xl font-black text-white flex items-center justify-center transition active:scale-95 focus:outline-none";
+            }
+
+            // Disable cell if filled or game over
+            btn.disabled = (symbol !== "" || isOver);
+        });
+
+        // Highlight winning line if victory
+        if (winningLine && Array.isArray(winningLine)) {
+            winningLine.forEach(idx => {
+                const btn = document.getElementById(`cell-${idx}`);
+                if (btn) {
+                    btn.classList.add('bg-emerald-500/20', 'border-emerald-400', 'animate-pulse');
+                }
+            });
+        }
+
+        // Update Turn Banner
+        isMyTurn = (currentTurn === currentUsername) && !isOver;
+        const banner = document.getElementById('turn-banner');
+        const turnText = document.getElementById('turn-text');
+        const spinner = document.getElementById('turn-spinner');
+
+        if (isOver) {
+            banner.className = "p-4 rounded-2xl border text-center transition shadow-lg bg-slate-900 border-slate-700 text-white";
+            turnText.innerText = "Game Finished";
+            spinner.className = "hidden";
+            showGameOverModal(winner);
+        } else if (isMyTurn) {
+            banner.className = "p-4 rounded-2xl border text-center transition shadow-lg bg-emerald-500/10 border-emerald-500/30 text-emerald-300";
+            turnText.innerText = "YOUR TURN! Choose a cell.";
+            spinner.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping mr-1";
+        } else {
+            banner.className = "p-4 rounded-2xl border text-center transition shadow-lg bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
+            turnText.innerText = `Waiting for ${currentTurn}'s move...`;
+            spinner.className = "w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping mr-1";
+        }
+    }
+
+    function sendMove(cellIndex) {
+        if (!isMyTurn) return;
+        if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
+            gameSocket.send(JSON.stringify({
+                type: 'make_move',
+                cell_index: cellIndex
+            }));
+        }
+    }
+
+    function showGameOverModal(winner) {
+        const modal = document.getElementById('game-over-modal');
+        const iconContainer = document.getElementById('modal-icon-container');
+        const icon = document.getElementById('modal-icon');
+        const title = document.getElementById('modal-title');
+        const subtitle = document.getElementById('modal-subtitle');
+
+        if (!modal) return;
+
+        if (winner === 'draw') {
+            title.innerText = "IT'S A DRAW!";
+            subtitle.innerText = "Both players played brilliantly.";
+            icon.className = "fa-solid fa-handshake";
+            iconContainer.className = "w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-3xl mx-auto";
+        } else if (winner === currentUsername) {
+            title.innerText = "VICTORY!";
+            subtitle.innerText = "Congratulations! You won the match.";
+            icon.className = "fa-solid fa-trophy";
+            iconContainer.className = "w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl mx-auto";
+        } else {
+            title.innerText = "DEFEAT";
+            subtitle.innerText = `${winner || 'Opponent'} won this round. Better luck next time!`;
+            icon.className = "fa-solid fa-skull";
+            iconContainer.className = "w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-3xl mx-auto";
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    function restartMatch() {
+        const modal = document.getElementById('game-over-modal');
+        if (modal) modal.classList.add('hidden');
+
+        if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
+            gameSocket.send(JSON.stringify({ type: 'restart_game' }));
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', initGameWebSocket);
+</script>
+{% endblock %}

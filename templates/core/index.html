@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}GamingHub - Play Real-Time Games with Friends{% endblock %}
+
+{% block content %}
+<div class="relative overflow-hidden pt-12 pb-24">
+    <!-- Background Glow Effects -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/15 blur-[140px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-1/3 right-10 w-[400px] h-[400px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <!-- Hero Banner Section -->
+        <div class="text-center max-w-3xl mx-auto space-y-6">
+            <span class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold">
+                <i class="fa-solid fa-bolt text-indigo-400"></i>
+                <span>Instant Multiplayer WebSockets</span>
+            </span>
+
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                Play Browser Games <br>
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
+                    Together in Real-Time
+                </span>
+            </h1>
+
+            <p class="text-slate-400 text-lg sm:text-xl font-normal leading-relaxed">
+                Create private room codes, invite your friends with a 6-character link, and launch instant browser multiplayer games without installing anything.
+            </p>
+
+            <!-- Quick Action Cards / Forms -->
+            <div class="pt-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
+                <!-- Create Room CTA -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-left hover:border-indigo-500/40 transition flex flex-col justify-between shadow-xl shadow-slate-950">
+                    <div>
+                        <div class="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-4">
+                            <i class="fa-solid fa-plus text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-1">Create Private Room</h3>
+                        <p class="text-xs text-slate-400 mb-4">Host a new game lobby and get a 6-character room code to share.</p>
+                    </div>
+                    <a href="{% url 'rooms:lobby' %}" class="w-full inline-flex items-center justify-center space-x-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl transition shadow-lg shadow-indigo-600/20">
+                        <span>Host a Game</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+
+                <!-- Join Room Form -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-left hover:border-indigo-500/40 transition flex flex-col justify-between shadow-xl shadow-slate-950">
+                    <div>
+                        <div class="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-4">
+                            <i class="fa-solid fa-key text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-1">Join with Room Code</h3>
+                        <p class="text-xs text-slate-400 mb-3">Enter a 6-character code provided by your friend.</p>
+                    </div>
+                    <form action="{% url 'rooms:join' %}" method="POST" class="space-y-2">
+                        {% csrf_token %}
+                        <div class="flex space-x-2">
+                            <input type="text" name="room_code" maxlength="6" placeholder="e.g. X7K9A2" required class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white uppercase tracking-widest font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500">
+                            <button type="submit" class="py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-sm rounded-xl transition shadow-md shadow-purple-600/20">
+                                Join
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Featured Games Grid -->
+        <div class="mt-20">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-white tracking-tight">Available Games</h2>
+                    <p class="text-slate-400 text-xs">Real-time games ready for instant multiplayer lobbies.</p>
+                </div>
+                <a href="{% url 'games:library' %}" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300">View All <i class="fa-solid fa-chevron-right ml-1"></i></a>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for game in available_games %}
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition flex flex-col justify-between">
+                        <div>
+                            <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-indigo-400 text-xl font-bold mb-4 border border-slate-700">
+                                <i class="fa-solid fa-chess-board"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">{{ game.name }}</h3>
+                            <p class="text-xs text-slate-400 mb-4 leading-relaxed">{{ game.description }}</p>
+                        </div>
+                        <div class="flex items-center justify-between pt-4 border-t border-slate-800 text-xs">
+                            <span class="text-slate-500"><i class="fa-solid fa-users mr-1"></i> {{ game.min_players }}-{{ game.max_players }} Players</span>
+                            <a href="{% url 'rooms:lobby' %}?game={{ game.game_id }}" class="text-indigo-400 font-semibold hover:underline">Play Now &rarr;</a>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-span-full py-12 text-center text-slate-500">
+                        No games registered yet.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

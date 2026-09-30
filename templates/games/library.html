@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Games Library - GamingHub{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div class="border-b border-slate-800 pb-6">
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Game Catalog</h1>
+        <p class="text-slate-400 text-xs mt-1">Select a game to view details or launch a private lobby.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for game in games %}
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col justify-between hover:border-indigo-500/30 transition">
+                <div>
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-2xl font-bold mb-4">
+                        <i class="fa-solid fa-gamepad"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">{{ game.name }}</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed mb-4">{{ game.description }}</p>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+                    <span class="text-xs text-slate-500"><i class="fa-solid fa-user-group mr-1"></i> {{ game.min_players }}-{{ game.max_players }} Players</span>
+                    <a href="{% url 'games:detail' game.game_id %}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition">
+                        View Details
+                    </a>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-span-full py-12 text-center text-slate-500">
+                No games available in library.
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

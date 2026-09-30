@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ game.name }} - GamingHub{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+        <div class="flex items-center space-x-4 border-b border-slate-800 pb-6">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-3xl font-bold">
+                <i class="fa-solid fa-chess-board"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-extrabold text-white">{{ game.name }}</h1>
+                <p class="text-xs text-slate-400 mt-1">Player Limit: <strong class="text-white">{{ game.min_players }}-{{ game.max_players }} Players</strong></p>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">About the Game</h3>
+            <p class="text-sm text-slate-300 leading-relaxed">{{ game.description }}</p>
+        </div>
+
+        <div class="pt-6 border-t border-slate-800 flex items-center justify-between">
+            <a href="{% url 'games:library' %}" class="text-xs font-semibold text-slate-400 hover:text-white">&larr; Back to Library</a>
+            <form action="{% url 'rooms:create' %}" method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="game_id" value="{{ game.game_id }}">
+                <input type="hidden" name="max_players" value="{{ game.max_players }}">
+                <button type="submit" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Host {{ game.name }} Room</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
