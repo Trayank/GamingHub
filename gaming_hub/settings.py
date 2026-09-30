@@ -112,7 +112,7 @@ DATABASES = {
     }
 }
 
-if 'DATABASE_URL' in os.environ:
+if os.environ.get('DATABASE_URL', '').strip():
     import dj_database_url
     DATABASES['default'] = dj_database_url.config(
         default=os.environ['DATABASE_URL'],
@@ -185,6 +185,9 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Ensure WhiteNoise build/collectstatic does not crash on missing static references
+WHITENOISE_MANIFEST_STRICT = os.environ.get('WHITENOISE_MANIFEST_STRICT', 'False').lower() in ('true', '1', 't')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
