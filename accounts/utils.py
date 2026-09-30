@@ -14,7 +14,11 @@ class GuestUserMiddleware:
 
     def __call__(self, request):
         if not request.session.session_key:
-            request.session.save()
+            try:
+                request.session.save()
+            except Exception:
+                # Prevent crash on read-only environments or unmigrated databases
+                pass
 
         if 'guest_id' not in request.session:
             guest_uuid = uuid.uuid4().hex[:8]

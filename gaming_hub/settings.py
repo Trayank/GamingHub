@@ -15,11 +15,17 @@ SECRET_KEY = os.environ.get(
     'django-insecure-gaming-hub-super-secret-key-change-in-production'
 )
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't')
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1')
 
 ALLOWED_HOSTS = [
-    host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,*').split(',') if host
+    host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,*.vercel.app,*').split(',') if host
 ]
+
+# Session Engine configuration
+if os.environ.get('VERCEL') and not os.environ.get('DATABASE_URL'):
+    SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+else:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 # Application definition
 INSTALLED_APPS = [
@@ -103,22 +109,31 @@ else:
         },
     }
 
-# Database
-# SQLite default for local dev, PostgreSQL ready via DATABASE_URL
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database Configuration
+if os.environ.get('VERCEL') and not os.environ.get('DATABASE_URL'):
+    # In serverless Vercel environments without external DB, use writable /tmp directory for SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': Path('/tmp/db.sqlite3'),
+        }
     }
-}
-
-if os.environ.get('DATABASE_URL', '').strip():
+elif os.environ.get('DATABASE_URL', '').strip():
     import dj_database_url
-    DATABASES['default'] = dj_database_url.config(
-        default=os.environ['DATABASE_URL'],
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ['DATABASE_URL'],
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
@@ -186,7 +201,6 @@ STORAGES = {
     },
 }
 
-# Ensure WhiteNoise build/collectstatic does not crash on missing static references
 WHITENOISE_MANIFEST_STRICT = os.environ.get('WHITENOISE_MANIFEST_STRICT', 'False').lower() in ('true', '1', 't')
 
 MEDIA_URL = '/media/'
