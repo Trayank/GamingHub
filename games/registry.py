@@ -1,4 +1,4 @@
-from typing import Dict, Type, List, Optional
+from typing import Any, Dict, Type, List, Optional
 from .base import BaseGameEngine
 
 
