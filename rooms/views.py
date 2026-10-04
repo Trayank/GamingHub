@@ -1,46 +1,99 @@
+import os
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseServerError
+from django.db import OperationalError
+from django.core.management import call_command
 from rooms.models import GameRoom, PlayerSession
+
+logger = logging.getLogger(__name__)
 
 def home_view(request):
     if not request.session.session_key:
-        request.session.create()
+        try:
+            request.session.create()
+        except Exception as e:
+            logger.warning(f"Session creation notice: {e}")
     return render(request, 'rooms/home.html')
 
 def create_room_view(request):
     if not request.session.session_key:
-        request.session.create()
+        try:
+            request.session.create()
+        except Exception as e:
+            logger.warning(f"Session creation notice: {e}")
 
     if request.method == 'POST':
         game_type = request.POST.get('game_type', 'LUDO')
         variant = request.POST.get('variant', '4P')
-        max_players = int(request.POST.get('max_players', 4))
+        try:
+            max_players = int(request.POST.get('max_players', 4))
+        except ValueError:
+            max_players = 4
 
-        room = GameRoom.objects.create(
-            host_session_key=request.session.session_key,
-            game_type=game_type,
-            variant=variant,
-            max_players=max_players,
-            status='LOBBY'
-        )
-        return redirect('room_detail', room_code=room.code)
+        try:
+            room = GameRoom.objects.create(
+                host_session_key=request.session.session_key or 'guest',
+                game_type=game_type,
+                variant=variant,
+                max_players=max_players,
+                status='LOBBY'
+            )
+            return redirect('room_detail', room_code=room.code)
+        except OperationalError as e:
+            logger.error(f"OperationalError during room creation: {e}")
+            # Dynamic migration retry for Vercel cold boot with /tmp/db.sqlite3
+            if os.getenv('VERCEL') and not os.getenv('DATABASE_URL'):
+                try:
+                    call_command('migrate', interactive=False)
+                    room = GameRoom.objects.create(
+                        host_session_key=request.session.session_key or 'guest',
+                        game_type=game_type,
+                        variant=variant,
+                        max_players=max_players,
+                        status='LOBBY'
+                    )
+                    return redirect('room_detail', room_code=room.code)
+                except Exception as retry_err:
+                    logger.error(f"Room creation retry failed after migration: {retry_err}")
+            return HttpResponseServerError(f"Database error creating room: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in create_room_view: {e}", exc_info=True)
+            return HttpResponseServerError(f"Failed to create game room: {e}")
 
     return redirect('home')
 
 def join_room_view(request):
     code = request.POST.get('room_code', '').strip().upper()
-    if code and GameRoom.objects.filter(code=code).exists():
-        return redirect('room_detail', room_code=code)
+    if code:
+        try:
+            if GameRoom.objects.filter(code=code).exists():
+                return redirect('room_detail', room_code=code)
+        except Exception as e:
+            logger.error(f"Error checking room code in join_room_view: {e}")
     return redirect('home')
 
 def room_detail_view(request, room_code):
     if not request.session.session_key:
-        request.session.create()
+        try:
+            request.session.create()
+        except Exception as e:
+            logger.warning(f"Session creation notice: {e}")
 
-    room = get_object_or_404(GameRoom, code=room_code.upper())
+    try:
+        room = get_object_or_404(GameRoom, code=room_code.upper())
+    except OperationalError as e:
+        logger.error(f"OperationalError in room_detail_view: {e}")
+        if os.getenv('VERCEL') and not os.getenv('DATABASE_URL'):
+            try:
+                call_command('migrate', interactive=False)
+                room = get_object_or_404(GameRoom, code=room_code.upper())
+            except Exception as retry_err:
+                return HttpResponseServerError(f"Database error: {retry_err}")
+        else:
+            return HttpResponseServerError(f"Database error: {e}")
+
     session_key = request.session.session_key
-
-    # Check if user has an existing session in this room
     player_session = PlayerSession.objects.filter(room=room, session_key=session_key).first()
 
     context = {
