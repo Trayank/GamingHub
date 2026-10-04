@@ -12,6 +12,7 @@ from .engine.tictactoe import (
     delete_game_state
 )
 from .engine.trivia import trivia_engine, censor_profanity
+from .engine.ludo import ludo_engine
 
 User = get_user_model()
 
@@ -393,6 +394,169 @@ class TriviaConsumer(AsyncJsonWebsocketConsumer):
             GameSession.objects.create(
                 room=room,
                 game_type='trivia',
+                winner=winner_name,
+                is_draw=is_draw,
+                final_state=final_state
+            )
+            room.status = Room.Status.FINISHED
+            room.save()
+
+
+class LudoConsumer(AsyncJsonWebsocketConsumer):
+    """
+    Real-Time Multiplayer Ludo Consumer.
+    Manages dice rolling, token movements, N-arm board state synchronization,
+    captures, extra rolls, profanity-filtered chat, and DB archiving.
+    """
+    async def connect(self):
+        self.room_code = self.scope['url_route']['kwargs']['room_code'].upper()
+        self.ludo_group_name = f'game_ludo_{self.room_code}'
+        self.user = self.scope.get('user')
+
+        room = await self.get_room()
+        if not room:
+            await self.close(code=4004)
+            return
+
+        await self.channel_layer.group_add(
+            self.ludo_group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+        state = await self.get_or_create_ludo_state(room)
+        player_name = self.get_player_name()
+
+        public_state = ludo_engine.get_public_state(state, player=player_name)
+        await self.send_json({
+            'type': 'ludo_state_update',
+            'state': public_state,
+        })
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'ludo_group_name'):
+            await self.channel_layer.group_discard(
+                self.ludo_group_name,
+                self.channel_name
+            )
+
+    async def receive_json(self, content):
+        event_type = content.get('type') or content.get('event')
+        player_name = self.get_player_name()
+
+        if event_type == 'roll_dice':
+            state = await self.fetch_cached_state()
+            if not state or state.get('is_over'):
+                return
+
+            updated_state, dice_val = ludo_engine.roll_dice(player_name, state)
+            await self.cache_state(updated_state)
+
+            await self.channel_layer.group_send(
+                self.ludo_group_name,
+                {
+                    'type': 'ludo_broadcast_event',
+                    'state': updated_state,
+                    'event_name': 'dice_rolled',
+                    'dice_value': dice_val,
+                    'actor': player_name,
+                }
+            )
+
+        elif event_type == 'move_token':
+            token_index = content.get('token_index')
+            move_data = {'token_index': token_index}
+
+            state = await self.fetch_cached_state()
+            if not state or not ludo_engine.validate_move(player_name, move_data, state):
+                await self.send_json({
+                    'type': 'invalid_move',
+                    'message': 'Illegal move choice.'
+                })
+                return
+
+            updated_state = ludo_engine.apply_move(player_name, move_data, state)
+            await self.cache_state(updated_state)
+
+            if updated_state.get('is_over'):
+                winner = updated_state.get('winner')
+                await self.archive_game(self.room_code, winner, False, updated_state)
+
+            await self.channel_layer.group_send(
+                self.ludo_group_name,
+                {
+                    'type': 'ludo_broadcast_event',
+                    'state': updated_state,
+                    'event_name': 'token_moved',
+                    'actor': player_name,
+                }
+            )
+
+        elif event_type == 'chat_message':
+            message = content.get('message', '').strip()
+            if message:
+                clean_message = censor_profanity(message)
+                await self.channel_layer.group_send(
+                    self.ludo_group_name,
+                    {
+                        'type': 'ludo_chat_event',
+                        'sender': player_name,
+                        'message': clean_message,
+                    }
+                )
+
+    async def ludo_broadcast_event(self, event):
+        player_name = self.get_player_name()
+        state = event.get('state', {})
+        public_state = ludo_engine.get_public_state(state, player=player_name)
+
+        await self.send_json({
+            'type': 'ludo_state_update',
+            'state': public_state,
+            'event_name': event.get('event_name'),
+            'dice_value': event.get('dice_value'),
+            'actor': event.get('actor'),
+        })
+
+    async def ludo_chat_event(self, event):
+        await self.send_json(event)
+
+    def get_player_name(self):
+        if self.user and self.user.is_authenticated:
+            return getattr(self.user, 'display_name', self.user.username)
+        session = self.scope.get('session', {})
+        return session.get('guest_name', 'Guest')
+
+    @database_sync_to_async
+    def get_room(self):
+        return Room.objects.filter(code=self.room_code).first()
+
+    @database_sync_to_async
+    def get_or_create_ludo_state(self, room):
+        state = get_game_state(room.code)
+        if not state:
+            players = list(room.players.values_list('name', flat=True))
+            if len(players) < 2:
+                players = ['Player_1', 'Player_2']
+            state = ludo_engine.initialize_state(players)
+            save_game_state(room.code, state)
+        return state
+
+    @database_sync_to_async
+    def fetch_cached_state(self):
+        return get_game_state(self.room_code)
+
+    @database_sync_to_async
+    def cache_state(self, state):
+        save_game_state(self.room_code, state)
+
+    @database_sync_to_async
+    def archive_game(self, room_code, winner_name, is_draw, final_state):
+        room = Room.objects.filter(code=room_code).first()
+        if room:
+            GameSession.objects.create(
+                room=room,
+                game_type='ludo',
                 winner=winner_name,
                 is_draw=is_draw,
                 final_state=final_state

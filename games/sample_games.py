@@ -2,9 +2,11 @@ from typing import Dict, Any, List, Optional
 from .base import BaseGameEngine
 from .registry import game_registry
 from .engine.trivia import TriviaEngine
+from .engine.ludo import LudoEngine
 
-# Register Trivia Party Engine
+# Register Engines
 game_registry.register(TriviaEngine)
+game_registry.register(LudoEngine)
 
 
 @game_registry.register

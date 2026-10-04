@@ -76,3 +76,28 @@ def trivia_play_view(request, room_code):
         'player': player,
         'current_username': player_name,
     })
+
+
+def ludo_play_view(request, room_code):
+    """Renders the 2-10 player dynamic Ludo game board UI."""
+    user = ensure_user(request)
+    room = get_object_or_404(Room, code=room_code.upper())
+    
+    player_name = getattr(user, 'display_name', user.username)
+    player = Player.objects.filter(room=room, name=player_name).first()
+    if not player:
+        player, _ = Player.objects.get_or_create(
+            room=room,
+            name=player_name,
+            defaults={
+                'user': user if user.is_authenticated else None,
+                'session_key': request.session.session_key or "",
+                'slot_index': room.get_next_slot_index()
+            }
+        )
+
+    return render(request, 'games/ludo.html', {
+        'room': room,
+        'player': player,
+        'current_username': player_name,
+    })

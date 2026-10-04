@@ -86,12 +86,13 @@ class LobbyConsumer(AsyncJsonWebsocketConsumer):
             is_host, can_start = await self.validate_start_game()
             if is_host and can_start:
                 await self.update_room_status(Room.Status.IN_PROGRESS)
+                game_url = await self.get_game_start_url()
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
                         'type': 'host_start_game_event',
                         'status': 'in_progress',
-                        'game_url': f'/rooms/{self.room_code}/play/',
+                        'game_url': game_url,
                     }
                 )
             else:
@@ -194,6 +195,18 @@ class LobbyConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def update_room_status(self, new_status):
         Room.objects.filter(code=self.room_code).update(status=new_status)
+
+    @database_sync_to_async
+    def get_game_start_url(self):
+        try:
+            room = Room.objects.get(code=self.room_code)
+            if room.game_type == 'trivia':
+                return f'/rooms/{self.room_code}/trivia/'
+            elif room.game_type == 'ludo':
+                return f'/rooms/{self.room_code}/ludo/'
+            return f'/rooms/{self.room_code}/play/'
+        except Room.DoesNotExist:
+            return f'/rooms/{self.room_code}/play/'
 
     @database_sync_to_async
     def get_lobby_state(self):
