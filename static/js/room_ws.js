@@ -45,6 +45,10 @@ function handleServerMessage(message) {
         if (typeof showReactionAnimation === 'function') {
             showReactionAnimation(message.emoji);
         }
+    } else if (message.type === 'quick_phrase' && message.phrase) {
+        if (typeof showQuickPhraseBubble === 'function') {
+            showQuickPhraseBubble(message.phrase, message.sender_name || 'Player');
+        }
     } else if (message.type === 'room_state') {
         currentRoomData = message.data;
         if (message.data.reconnect_token) {
@@ -177,24 +181,35 @@ function renderGame(data) {
             const currentP = state.players[state.current_player_index];
             turnColor = currentP ? currentP.color : 'red';
             const isMyTurn = (state.current_player_index === clientSeatIndex);
-            turnStatusText.innerText = isMyTurn ? `Your Turn! (${currentP.name})` : `Turn: ${currentP.name}`;
+            turnStatusText.innerText = isMyTurn ? `Your Turn! (${currentP ? currentP.name : 'Player'})` : `Turn: ${currentP ? currentP.name : 'Player'}`;
             
+            // Start/Reset 15-second Turn Timer
+            startTurnTimer(isMyTurn, state.phase);
+
             // Show Ludo controls
-            document.getElementById('ludoControls').classList.remove('hidden');
-            document.getElementById('bughouseReservePanel').classList.add('hidden');
+            const ludoCtrl = document.getElementById('ludoControls');
+            if (ludoCtrl) ludoCtrl.classList.remove('hidden');
+            const bugCtrl = document.getElementById('bughouseReservePanel');
+            if (bugCtrl) bugCtrl.classList.add('hidden');
 
             const rollBtn = document.getElementById('rollDiceBtn');
             const canRoll = data.client_valid_moves && data.client_valid_moves.can_roll;
-            rollBtn.disabled = !canRoll;
-            rollBtn.className = canRoll 
-                ? "w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer"
-                : "w-full py-3 bg-slate-800 text-slate-500 font-bold rounded-xl cursor-not-allowed";
+            if (rollBtn) {
+                rollBtn.disabled = !canRoll;
+                rollBtn.className = canRoll 
+                    ? "w-full py-3 bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-extrabold text-xs rounded-xl shadow-lg transition tracking-wider uppercase cursor-pointer"
+                    : "w-full py-3 bg-slate-800 text-slate-500 font-bold text-xs rounded-xl cursor-not-allowed opacity-60";
+            }
 
             if (state.dice_value !== null && state.dice_value !== undefined) {
-                document.getElementById('diceDisplay').classList.remove('hidden');
-                document.getElementById('diceValueText').innerText = state.dice_value;
-            } else {
-                document.getElementById('diceDisplay').classList.add('hidden');
+                const cube = document.getElementById('diceCube');
+                if (cube) {
+                    cube.className = `dice-cube show-${state.dice_value}`;
+                }
+            }
+
+            if (state.phase === 'GAME_OVER') {
+                showVictoryPodiumModal(state);
             }
 
             renderLudoBoard(state, data.client_valid_moves);
@@ -298,6 +313,133 @@ function getColorHex(colorName) {
         'black': '#334155'
     };
     return map[colorName] || '#6366f1';
+}
+
+let turnTimerInterval = null;
+let turnTimeRemaining = 15;
+
+function startTurnTimer(isMyTurn, phase) {
+    if (turnTimerInterval) clearInterval(turnTimerInterval);
+    turnTimeRemaining = 15;
+    updateTurnTimerDisplay();
+
+    turnTimerInterval = setInterval(() => {
+        turnTimeRemaining--;
+        updateTurnTimerDisplay();
+
+        if (turnTimeRemaining <= 0) {
+            clearInterval(turnTimerInterval);
+            if (isMyTurn) {
+                if (phase === 'WAITING_FOR_ROLL') {
+                    triggerDiceRollAnimation();
+                }
+            }
+        }
+    }, 1000);
+}
+
+function updateTurnTimerDisplay() {
+    const banner = document.getElementById('turnStatusText');
+    if (!banner) return;
+    const colorClass = turnTimeRemaining > 10 ? 'text-emerald-400' : (turnTimeRemaining > 5 ? 'text-amber-400' : 'text-red-400');
+    let timerBadge = document.getElementById('turnTimerBadge');
+    if (!timerBadge) {
+        timerBadge = document.createElement('span');
+        timerBadge.id = 'turnTimerBadge';
+        timerBadge.className = `ml-2 font-mono text-xs font-bold ${colorClass} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`;
+        banner.appendChild(timerBadge);
+    }
+    timerBadge.className = `ml-2 font-mono text-xs font-bold ${colorClass} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`;
+    timerBadge.innerText = `⏱ ${turnTimeRemaining}s`;
+}
+
+function triggerDiceRollAnimation() {
+    if (typeof playLudoSound === 'function') {
+        playLudoSound('dice');
+    }
+    const cube = document.getElementById('diceCube');
+    if (cube) {
+        cube.classList.add('rolling');
+        setTimeout(() => cube.classList.remove('rolling'), 600);
+    }
+    sendRollDice();
+}
+
+function showVictoryPodiumModal(state) {
+    const modal = document.getElementById('podiumModal');
+    const podiumList = document.getElementById('podiumList');
+    if (!modal || !podiumList) return;
+
+    modal.classList.remove('hidden');
+    podiumList.innerHTML = '';
+
+    const rankings = state.rankings || [];
+    const positions = [
+        { rank: 2, height: 'h-24', bg: 'bg-slate-700', label: '🥈 2nd', color: 'text-slate-300' },
+        { rank: 1, height: 'h-32', bg: 'bg-amber-500', label: '🥇 1st', color: 'text-amber-300' },
+        { rank: 3, height: 'h-20', bg: 'bg-amber-800', label: '🥉 3rd', color: 'text-amber-600' }
+    ];
+
+    positions.forEach(pos => {
+        const entry = rankings.find(r => r.rank === pos.rank) || (pos.rank === 1 && state.winner !== null ? { name: state.players[state.winner].name } : null);
+        const col = document.createElement('div');
+        col.className = 'flex flex-col items-center justify-end';
+        col.innerHTML = `
+            <div class="font-bold text-xs text-white mb-1">${entry ? entry.name : '-'}</div>
+            <div class="${pos.height} w-20 ${pos.bg} rounded-t-2xl flex items-center justify-center border-t-2 border-amber-300/40 shadow-lg">
+                <span class="font-black text-xs text-white">${pos.label}</span>
+            </div>
+        `;
+        podiumList.appendChild(col);
+    });
+
+    triggerConfettiAnimation();
+    if (typeof playLudoSound === 'function') {
+        playLudoSound('win');
+    }
+}
+
+function triggerConfettiAnimation() {
+    const canvas = document.getElementById('confettiCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+
+    const particles = [];
+    const colors = ['#ef4444', '#3b82f6', '#eab308', '#10b981', '#a855f7', '#ec4899'];
+
+    for (let i = 0; i < 80; i++) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height - canvas.height,
+            r: Math.random() * 6 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            vx: (Math.random() - 0.5) * 2,
+            vy: Math.random() * 3 + 2,
+            rot: Math.random() * 360,
+            vRot: (Math.random() - 0.5) * 10
+        });
+    }
+
+    function renderConfetti() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.vRot;
+            if (p.y > canvas.height) p.y = -10;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate((p.rot * Math.PI) / 180);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+            ctx.restore();
+        });
+        requestAnimationFrame(renderConfetti);
+    }
+    renderConfetti();
 }
 
 document.addEventListener('DOMContentLoaded', initWebSocket);

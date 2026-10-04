@@ -1,4 +1,80 @@
-// ludo_render.js - Parametric Polygonal Board Generator (SVG/Canvas) for 2-10 Players Ludo
+// ludo_render.js - Authentic Ludo King Style Render Engine & Web Audio Synthesizer
+
+let previousTokenStates = {}; // Key: "pIndex_tId" -> { state, pos }
+let animatedTokens = {};       // Key: "pIndex_tId" -> { currentR, currentC, isHopping, arcOffset }
+
+// Web Audio API Synthesizer for Ludo Sound Effects
+const ludoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playLudoSound(type) {
+    if (ludoAudioCtx.state === 'suspended') {
+        ludoAudioCtx.resume();
+    }
+    const now = ludoAudioCtx.currentTime;
+    const osc = ludoAudioCtx.createOscillator();
+    const gain = ludoAudioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(ludoAudioCtx.destination);
+
+    if (type === 'dice') {
+        // Noise / Rattling 3D dice roll
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(450, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+    } else if (type === 'step') {
+        // Pop-pop wooden tile hop
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+    } else if (type === 'capture') {
+        // Capture spin & thud
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.25);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    } else if (type === 'home') {
+        // Triumph home chord
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+    } else if (type === 'win') {
+        // Victory Fanfare
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523, now);
+        osc.frequency.setValueAtTime(659, now + 0.15);
+        osc.frequency.setValueAtTime(783, now + 0.3);
+        osc.frequency.setValueAtTime(1046, now + 0.45);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+    } else if (type === 'phrase') {
+        // Speech Bubble Chime
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(1174, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+    }
+}
 
 function renderLudoBoard(state, validMovesInfo) {
     const canvas = document.getElementById('gameBoardCanvas');
@@ -12,27 +88,24 @@ function renderLudoBoard(state, validMovesInfo) {
 
     ctx.clearRect(0, 0, width, height);
 
-    // Background fill
+    // Deep slate background
     ctx.fillStyle = '#090d16';
     ctx.fillRect(0, 0, width, height);
 
     const playerCount = state.player_count || 4;
     const totalArms = state.total_arms || playerCount;
-    const players = state.players || [];
-    const validTokenIds = (validMovesInfo && validMovesInfo.valid_token_ids) ? validMovesInfo.valid_token_ids : [];
-    const movePreviews = (validMovesInfo && validMovesInfo.move_previews) ? validMovesInfo.move_previews : {};
-
     const tokenClickTargets = [];
 
+    // Check token movements for step-hopping animation triggers
+    detectTokenMovement(state);
+
     if (totalArms === 4) {
-        // Standard 15x15 Cross Layout for 2-4 players
         renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, tokenClickTargets);
     } else {
-        // Parametric Polygonal Layout (Hexagonal: 5-6, Octagonal: 7-8, Decagonal: 9-10)
         renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, validMovesInfo, tokenClickTargets);
     }
 
-    // Canvas Click Handler
+    // Canvas Click Event Handler
     canvas.onclick = function(e) {
         const rect = canvas.getBoundingClientRect();
         const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -49,115 +122,164 @@ function renderLudoBoard(state, validMovesInfo) {
     };
 }
 
+function detectTokenMovement(state) {
+    if (!state || !state.players) return;
+
+    state.players.forEach(p => {
+        p.tokens.forEach(token => {
+            const key = `${p.id}_${token.id}`;
+            const prev = previousTokenStates[key];
+
+            if (prev) {
+                if (prev.state === 'TRACK' && token.state === 'YARD') {
+                    // Token was captured!
+                    playLudoSound('capture');
+                } else if (token.state === 'HOME' && prev.state !== 'HOME') {
+                    // Token reached HOME!
+                    playLudoSound('home');
+                } else if (token.pos > prev.pos && token.state === prev.state) {
+                    // Token moved forward! Play step sound
+                    playLudoSound('step');
+                }
+            }
+            previousTokenStates[key] = { state: token.state, pos: token.pos };
+        });
+    });
+}
+
 function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, tokenClickTargets) {
     const size = Math.min(width, height);
     const grid = 15;
     const cell = size / grid;
 
-    const COLORS = {
-        0: { fill: '#ef4444', name: 'red' },    // Top-Left / Red
-        1: { fill: '#3b82f6', name: 'blue' },   // Top-Right / Blue
-        2: { fill: '#eab308', name: 'yellow' }, // Bottom-Right / Yellow
-        3: { fill: '#10b981', name: 'green' }   // Bottom-Left / Green
+    // Authentic Ludo King Colors:
+    // Green (Top-Left: 0..5, 0..5)
+    // Yellow (Top-Right: 0..5, 9..14)
+    // Blue (Bottom-Right: 9..14, 9..14)
+    // Red (Bottom-Left: 9..14, 0..5)
+    const LUDO_COLORS = {
+        red: '#ed1c24',
+        blue: '#0072bc',
+        yellow: '#ffcc00',
+        green: '#00a651'
     };
 
-    // Draw Outer Board Border
+    // Draw Outer Board Frame
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, size, size);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
     ctx.strokeRect(0, 0, size, size);
 
-    // Draw 4 Corner Base Yards (6x6 cells each)
+    // 4 Corner Base Yards (6x6 cells each)
     const yards = [
-        { r: 0, c: 0, seat: 0, color: '#ef4444' }, // Red Top-Left
-        { r: 0, c: 9, seat: 1, color: '#3b82f6' }, // Blue Top-Right
-        { r: 9, c: 9, seat: 2, color: '#eab308' }, // Yellow Bottom-Right
-        { r: 9, c: 0, seat: 3, color: '#10b981' }  // Green Bottom-Left
+        { r: 9, c: 0, seat: 0, color: LUDO_COLORS.red, name: 'Red' },       // Red (Bottom-Left)
+        { r: 9, c: 9, seat: 1, color: LUDO_COLORS.blue, name: 'Blue' },     // Blue (Bottom-Right)
+        { r: 0, c: 9, seat: 2, color: LUDO_COLORS.yellow, name: 'Yellow' }, // Yellow (Top-Right)
+        { r: 0, c: 0, seat: 3, color: LUDO_COLORS.green, name: 'Green' }    // Green (Top-Left)
     ];
 
     yards.forEach(y => {
+        // Base Yard Background
         ctx.fillStyle = y.color;
         ctx.fillRect(y.c * cell, y.r * cell, 6 * cell, 6 * cell);
 
-        // White inner yard box
+        // White Inner Box
         ctx.fillStyle = '#ffffff';
         ctx.fillRect((y.c + 1) * cell, (y.r + 1) * cell, 4 * cell, 4 * cell);
 
         // 4 Yard Circle Token Holders
         const circles = [
             { r: y.r + 1.8, c: y.c + 1.8 },
-            { r: y.r + 1.8, c: y.c + 3.2 },
-            { r: y.r + 3.2, c: y.c + 1.8 },
-            { r: y.r + 3.2, c: y.c + 3.2 }
+            { r: y.r + 1.8, c: y.c + 4.2 },
+            { r: y.r + 4.2, c: y.c + 1.8 },
+            { r: y.r + 4.2, c: y.c + 4.2 }
         ];
 
         circles.forEach(circ => {
             ctx.beginPath();
-            ctx.arc(circ.c * cell, circ.r * cell, cell * 0.5, 0, Math.PI * 2);
+            ctx.arc(circ.c * cell, circ.r * cell, cell * 0.55, 0, Math.PI * 2);
             ctx.fillStyle = y.color;
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2.5;
             ctx.stroke();
         });
     });
 
-    // Draw Center Home Triangle Zone (3x3 grid cells: 6..8, 6..8)
+    // Center Home Triangles (3x3 grid cells: 6..8, 6..8)
     const cx = 7.5 * cell;
     const cy = 7.5 * cell;
 
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#0f172a';
     ctx.fillRect(6 * cell, 6 * cell, 3 * cell, 3 * cell);
 
-    // Center triangles
-    drawTriangle(ctx, 6 * cell, 6 * cell, 6 * cell, 9 * cell, cx, cy, '#ef4444');
-    drawTriangle(ctx, 6 * cell, 6 * cell, 9 * cell, 6 * cell, cx, cy, '#3b82f6');
-    drawTriangle(ctx, 9 * cell, 6 * cell, 9 * cell, 9 * cell, cx, cy, '#eab308');
-    drawTriangle(ctx, 6 * cell, 9 * cell, 9 * cell, 9 * cell, cx, cy, '#10b981');
+    // 4 Triangles meeting in center
+    drawTriangle(ctx, 6 * cell, 9 * cell, 9 * cell, 9 * cell, cx, cy, LUDO_COLORS.red);    // Bottom (Red)
+    drawTriangle(ctx, 9 * cell, 6 * cell, 9 * cell, 9 * cell, cx, cy, LUDO_COLORS.blue);   // Right (Blue)
+    drawTriangle(ctx, 6 * cell, 6 * cell, 9 * cell, 6 * cell, cx, cy, LUDO_COLORS.yellow); // Top (Yellow)
+    drawTriangle(ctx, 6 * cell, 6 * cell, 6 * cell, 9 * cell, cx, cy, LUDO_COLORS.green);  // Left (Green)
 
-    // Draw Grid Track Cells (3x6 tracks)
+    // Center Trophy / Crown Podium Graphic
+    ctx.font = 'bold 20px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText('🏆', cx, cy);
+    ctx.shadowBlur = 0;
+
+    // Draw Grid Track Cells & Home Stretches
     for (let r = 0; r < 15; r++) {
         for (let c = 0; c < 15; c++) {
             const isYard = (r < 6 && c < 6) || (r < 6 && c > 8) || (r > 8 && c < 6) || (r > 8 && c > 8);
             const isCenter = (r >= 6 && r <= 8 && c >= 6 && c <= 8);
 
             if (!isYard && !isCenter) {
-                ctx.strokeStyle = '#475569';
+                ctx.strokeStyle = '#cbd5e1';
                 ctx.lineWidth = 1;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(c * cell, r * cell, cell, cell);
                 ctx.strokeRect(c * cell, r * cell, cell, cell);
 
                 // Home Stretch Colors
-                if (c === 7 && r >= 1 && r <= 5) { ctx.fillStyle = '#ef4444'; ctx.fillRect(c * cell, r * cell, cell, cell); }
-                if (r === 7 && c >= 9 && c <= 13) { ctx.fillStyle = '#3b82f6'; ctx.fillRect(c * cell, r * cell, cell, cell); }
-                if (c === 7 && r >= 9 && r <= 13) { ctx.fillStyle = '#eab308'; ctx.fillRect(c * cell, r * cell, cell, cell); }
-                if (r === 7 && c >= 1 && c <= 5) { ctx.fillStyle = '#10b981'; ctx.fillRect(c * cell, r * cell, cell, cell); }
+                if (c === 7 && r >= 9 && r <= 13) { ctx.fillStyle = LUDO_COLORS.red; ctx.fillRect(c * cell, r * cell, cell, cell); ctx.strokeRect(c * cell, r * cell, cell, cell); }
+                if (r === 7 && c >= 9 && c <= 13) { ctx.fillStyle = LUDO_COLORS.blue; ctx.fillRect(c * cell, r * cell, cell, cell); ctx.strokeRect(c * cell, r * cell, cell, cell); }
+                if (c === 7 && r >= 1 && r <= 5) { ctx.fillStyle = LUDO_COLORS.yellow; ctx.fillRect(c * cell, r * cell, cell, cell); ctx.strokeRect(c * cell, r * cell, cell, cell); }
+                if (r === 7 && c >= 1 && c <= 5) { ctx.fillStyle = LUDO_COLORS.green; ctx.fillRect(c * cell, r * cell, cell, cell); ctx.strokeRect(c * cell, r * cell, cell, cell); }
 
-                // Safe Start Spots (Colored)
-                if (r === 1 && c === 6) drawSafeSquare(ctx, c, r, cell, '#ef4444');
-                if (r === 6 && c === 13) drawSafeSquare(ctx, c, r, cell, '#3b82f6');
-                if (r === 13 && c === 8) drawSafeSquare(ctx, c, r, cell, '#eab308');
-                if (r === 8 && c === 1) drawSafeSquare(ctx, c, r, cell, '#10b981');
+                // Safe Start Spots (Colored with Shield/Star)
+                if (r === 8 && c === 1) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.red);
+                if (r === 13 && c === 8) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.blue);
+                if (r === 6 && c === 13) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.yellow);
+                if (r === 1 && c === 6) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.green);
 
                 // Intermediate Star Safe Spots
-                if (r === 2 && c === 8) drawStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.35, '#f59e0b');
-                if (r === 8 && c === 12) drawStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.35, '#f59e0b');
-                if (r === 12 && c === 6) drawStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.35, '#f59e0b');
-                if (r === 6 && c === 2) drawStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.35, '#f59e0b');
+                if (r === 12 && c === 6) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
+                if (r === 8 && c === 12) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
+                if (r === 2 && c === 8) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
+                if (r === 6 && c === 2) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
             }
         }
     }
 
+    // Directional Arrows Entering Home Straight Columns
+    drawArrow(ctx, (7.5) * cell, (14.5) * cell, 'UP', LUDO_COLORS.red, cell);
+    drawArrow(ctx, (14.5) * cell, (7.5) * cell, 'LEFT', LUDO_COLORS.blue, cell);
+    drawArrow(ctx, (7.5) * cell, (0.5) * cell, 'DOWN', LUDO_COLORS.yellow, cell);
+    drawArrow(ctx, (0.5) * cell, (7.5) * cell, 'RIGHT', LUDO_COLORS.green, cell);
+
     // Render Player Tokens
     const validTokenIds = (validMovesInfo && validMovesInfo.valid_token_ids) ? validMovesInfo.valid_token_ids : [];
+    const pulsingScale = 1 + Math.sin(Date.now() / 150) * 0.12;
 
     state.players.forEach(p => {
         const yardInfo = yards[p.seat_index % 4];
         const circs = [
             { r: yardInfo.r + 1.8, c: yardInfo.c + 1.8 },
-            { r: yardInfo.r + 1.8, c: yardInfo.c + 3.2 },
-            { r: yardInfo.r + 3.2, c: yardInfo.c + 1.8 },
-            { r: yardInfo.r + 3.2, c: yardInfo.c + 3.2 }
+            { r: yardInfo.r + 1.8, c: yardInfo.c + 4.2 },
+            { r: yardInfo.r + 4.2, c: yardInfo.c + 1.8 },
+            { r: yardInfo.r + 4.2, c: yardInfo.c + 4.2 }
         ];
 
         p.tokens.forEach((token, tIdx) => {
@@ -167,30 +289,44 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
                 tx = circs[tIdx].c * cell;
                 ty = circs[tIdx].r * cell;
             } else if (token.state === 'HOME') {
-                tx = cx + (tIdx - 1.5) * 8;
-                ty = cy + (tIdx - 1.5) * 8;
+                tx = cx + (tIdx - 1.5) * 10;
+                ty = cy + (tIdx - 1.5) * 10;
             } else {
-                // Calculate cell grid position from relative pos
                 const gridPos = getStandardGridCoords(p.seat_index, token.state, token.pos);
                 tx = (gridPos.c + 0.5) * cell;
                 ty = (gridPos.r + 0.5) * cell;
             }
 
             const isSelectable = (state.current_player_index === p.id && validTokenIds.includes(token.id) && p.id === clientSeatIndex);
+            const tokenRadius = isSelectable ? (cell * 0.42 * pulsingScale) : (cell * 0.35);
 
+            // Token Base Drop Shadow
             ctx.beginPath();
-            ctx.arc(tx, ty, isSelectable ? cell * 0.45 : cell * 0.35, 0, Math.PI * 2);
+            ctx.arc(tx + 2, ty + 3, tokenRadius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.fill();
+
+            // Outer Token Body
+            ctx.beginPath();
+            ctx.arc(tx, ty, tokenRadius, 0, Math.PI * 2);
             ctx.fillStyle = getColorHex(p.color);
             ctx.fill();
-            ctx.strokeStyle = isSelectable ? '#fbbf24' : '#ffffff';
-            ctx.lineWidth = isSelectable ? 3 : 1.5;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = isSelectable ? 3 : 2;
             ctx.stroke();
 
+            // Inner Ring Highlight
+            ctx.beginPath();
+            ctx.arc(tx, ty, tokenRadius * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.fill();
+
+            // Glowing Bouncing Ring for Legal Moves
             if (isSelectable) {
                 ctx.beginPath();
-                ctx.arc(tx, ty, cell * 0.55, 0, Math.PI * 2);
+                ctx.arc(tx, ty, tokenRadius * 1.35, 0, Math.PI * 2);
                 ctx.strokeStyle = '#fbbf24';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3;
                 ctx.stroke();
             }
 
@@ -198,11 +334,15 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
                 tokenId: token.id,
                 x: tx,
                 y: ty,
-                radius: cell * 0.55,
+                radius: cell * 0.6,
                 isSelectable: isSelectable
             });
         });
     });
+
+    if (validTokenIds.length > 0) {
+        requestAnimationFrame(() => renderLudoBoard(state, validMovesInfo));
+    }
 }
 
 function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, validMovesInfo, tokenClickTargets) {
@@ -219,7 +359,7 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
         else ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.strokeStyle = '#475569';
     ctx.lineWidth = 3;
@@ -229,7 +369,7 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
     ctx.font = 'bold 16px Outfit, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('HOME', cx, cy);
+    ctx.fillText('HOME 🏆', cx, cy);
 
     const validTokenIds = (validMovesInfo && validMovesInfo.valid_token_ids) ? validMovesInfo.valid_token_ids : [];
 
@@ -243,11 +383,11 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
         ctx.beginPath();
         ctx.arc(yardX, yardY, 36, 0, Math.PI * 2);
         ctx.fillStyle = getColorHex(p.color);
-        ctx.globalAlpha = 0.25;
+        ctx.globalAlpha = 0.3;
         ctx.fill();
         ctx.globalAlpha = 1.0;
         ctx.strokeStyle = getColorHex(p.color);
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
         ctx.fillStyle = '#ffffff';
@@ -259,7 +399,7 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
         ctx.moveTo(yardX, yardY);
         ctx.lineTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
         ctx.strokeStyle = getColorHex(p.color);
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
         ctx.stroke();
 
         // Render Tokens
@@ -312,7 +452,6 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
 }
 
 function getStandardGridCoords(seatIdx, state, pos) {
-    // Mapping for standard 15x15 Ludo track
     const TRACK_COORDS = [
         {r:6, c:1}, {r:6, c:2}, {r:6, c:3}, {r:6, c:4}, {r:6, c:5},
         {r:5, c:6}, {r:4, c:6}, {r:3, c:6}, {r:2, c:6}, {r:1, c:6}, {r:0, c:6},
@@ -329,15 +468,16 @@ function getStandardGridCoords(seatIdx, state, pos) {
     ];
 
     if (state === 'TRACK') {
-        const startOffset = [50, 11, 24, 37][seatIdx % 4];
-        const absIdx = (startOffset + pos) % TRACK_COORDS.length;
+        const startOffsets = [44, 31, 18, 5];
+        const startOffset = startOffsets[seatIdx % 4];
+        const absIdx = (startOffset + Math.round((pos * 52) / 24)) % TRACK_COORDS.length;
         return TRACK_COORDS[absIdx];
     } else if (state === 'STRETCH') {
         const stretchPaths = [
-            [{r:7, c:1}, {r:7, c:2}, {r:7, c:3}, {r:7, c:4}, {r:7, c:5}], // Green
-            [{r:1, c:7}, {r:2, c:7}, {r:3, c:7}, {r:4, c:7}, {r:5, c:7}], // Red
-            [{r:7, c:13}, {r:7, c:12}, {r:7, c:11}, {r:7, c:10}, {r:7, c:9}], // Blue
-            [{r:13, c:7}, {r:12, c:7}, {r:11, c:7}, {r:10, c:7}, {r:9, c:7}]  // Yellow
+            [{r:13, c:7}, {r:12, c:7}, {r:11, c:7}, {r:10, c:7}, {r:9, c:7}, {r:8, c:7}], // Red (Bottom-Left)
+            [{r:7, c:13}, {r:7, c:12}, {r:7, c:11}, {r:7, c:10}, {r:7, c:9}, {r:7, c:8}],  // Blue (Bottom-Right)
+            [{r:1, c:7}, {r:2, c:7}, {r:3, c:7}, {r:4, c:7}, {r:5, c:7}, {r:6, c:7}],     // Yellow (Top-Right)
+            [{r:7, c:1}, {r:7, c:2}, {r:7, c:3}, {r:7, c:4}, {r:7, c:5}, {r:7, c:6}]      // Green (Top-Left)
         ];
         const path = stretchPaths[seatIdx % 4];
         return path[Math.min(pos, path.length - 1)];
@@ -354,17 +494,20 @@ function drawTriangle(ctx, x1, y1, x2, y2, x3, y3, color) {
     ctx.fillStyle = color;
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 }
 
 function drawSafeSquare(ctx, c, r, cell, color) {
     ctx.fillStyle = color;
     ctx.fillRect(c * cell, r * cell, cell, cell);
-    drawStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.35, '#ffffff');
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(c * cell, r * cell, cell, cell);
+    drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#ffffff');
 }
 
-function drawStar(ctx, cx, cy, r, color) {
+function drawShieldStar(ctx, cx, cy, r, color) {
     ctx.save();
     ctx.beginPath();
     ctx.fillStyle = color;
@@ -375,4 +518,38 @@ function drawStar(ctx, cx, cy, r, color) {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+}
+
+function drawArrow(ctx, cx, cy, dir, color, cell) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = `bold ${cell * 0.7}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const arrowChar = dir === 'UP' ? '⬆' : dir === 'DOWN' ? '⬇' : dir === 'LEFT' ? '⬅' : '➔';
+    ctx.fillText(arrowChar, cx, cy);
+    ctx.restore();
+}
+
+function sendQuickPhrase(phrase) {
+    playLudoSound('phrase');
+    showQuickPhraseBubble(phrase);
+    if (typeof socket !== 'undefined' && socket) {
+        socket.send(jsonPayload('game_action', { type: 'quick_phrase', phrase: phrase }));
+    }
+}
+
+function showQuickPhraseBubble(phrase, senderName = 'You') {
+    const overlay = document.getElementById('reactionOverlay');
+    if (!overlay) return;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'speech-bubble bg-slate-800/90 text-white font-bold text-xs px-3 py-1.5 rounded-2xl border border-slate-600 shadow-xl flex items-center space-x-1.5 z-30';
+    bubble.innerHTML = `<span>💬</span><span>${senderName}: "${phrase}"</span>`;
+    overlay.appendChild(bubble);
+
+    setTimeout(() => {
+        bubble.classList.add('opacity-0', 'scale-90');
+        setTimeout(() => bubble.remove(), 400);
+    }, 2500);
 }
