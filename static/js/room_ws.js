@@ -41,6 +41,10 @@ function initWebSocket() {
 function handleServerMessage(message) {
     if (message.type === 'error') {
         showError(message.message);
+    } else if (message.type === 'reaction' && message.emoji) {
+        if (typeof showReactionAnimation === 'function') {
+            showReactionAnimation(message.emoji);
+        }
     } else if (message.type === 'room_state') {
         currentRoomData = message.data;
         if (message.data.reconnect_token) {
@@ -202,7 +206,28 @@ function renderGame(data) {
                 turnColor = state.current_turn === 'w' ? 'white' : 'black';
                 const currentP = state.players[state.current_player_index];
                 const isMyTurn = (state.current_player_index === clientSeatIndex);
-                turnStatusText.innerText = isMyTurn ? `Your Turn! (${currentP.name})` : `Turn: ${currentP.name}`;
+                turnStatusText.innerText = isMyTurn ? `Your Turn! (${currentP ? currentP.name : 'Player'})` : `Turn: ${currentP ? currentP.name : 'Player'}`;
+
+                const isBlack = (clientSeatIndex === 1);
+                const bottomSeat = isBlack ? 1 : 0;
+                const topSeat = isBlack ? 0 : 1;
+
+                const bottomP = data.players.find(p => p.seat_index === bottomSeat);
+                const topP = data.players.find(p => p.seat_index === topSeat);
+
+                if (bottomP) {
+                    const bName = document.getElementById('bottomPlayerName');
+                    const bRating = document.getElementById('bottomPlayerRating');
+                    if (bName) bName.innerText = bottomP.player_name || 'You';
+                    if (bRating) bRating.innerText = `(${bottomP.rating || 1200})`;
+                }
+                if (topP) {
+                    const tName = document.getElementById('topPlayerName');
+                    const tRating = document.getElementById('topPlayerRating');
+                    if (tName) tName.innerText = topP.player_name || 'Opponent';
+                    if (tRating) tRating.innerText = `(${topP.rating || 1200})`;
+                }
+
                 renderStandardChessBoard(state, data.client_valid_moves, clientSeatIndex);
 
             } else if (gameType === 'CHESS_4WAY') {

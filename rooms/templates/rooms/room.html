@@ -101,17 +101,99 @@
 
         <!-- Canvas & Controls Container -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- Board Canvas -->
-            <div class="lg:col-span-3 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center min-h-[500px] relative">
-                <canvas id="gameBoardCanvas" width="600" height="600" class="max-w-full h-auto border border-slate-700/50 rounded-xl bg-slate-950 shadow-2xl cursor-pointer"></canvas>
+            <!-- Board Canvas & Player Cards -->
+            <div class="lg:col-span-3 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center min-h-[500px] relative space-y-4">
+                
+                <!-- Top Player Card (Opponent) -->
+                <div id="topPlayerCard" class="w-full max-w-[600px] glass-panel p-3 rounded-xl border border-slate-800 flex items-center justify-between transition-all duration-300">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl" id="topPlayerAvatar">
+                            ♟️
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="font-bold text-white text-sm" id="topPlayerName">Opponent</span>
+                                <span class="text-xs text-slate-400 font-mono" id="topPlayerRating">(1200)</span>
+                            </div>
+                            <div class="flex items-center space-x-2 text-xs text-slate-400">
+                                <div id="topPlayerGraveyard" class="flex items-center space-x-0.5 text-slate-300"></div>
+                                <span id="topPlayerAdvantage" class="font-bold text-emerald-400 text-xs"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 font-mono text-sm font-bold text-slate-200 shadow-inner" id="topPlayerClock">
+                        10:00
+                    </div>
+                </div>
+
+                <!-- Board Canvas -->
+                <div class="relative">
+                    <canvas id="gameBoardCanvas" width="600" height="600" class="max-w-full h-auto border border-slate-700/50 rounded-xl bg-slate-950 shadow-2xl cursor-pointer"></canvas>
+
+                    <!-- Emoji Reaction Overlay -->
+                    <div id="reactionOverlay" class="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden"></div>
+                </div>
+
+                <!-- Bottom Player Card (You) -->
+                <div id="bottomPlayerCard" class="w-full max-w-[600px] glass-panel p-3 rounded-xl border border-slate-800 flex items-center justify-between transition-all duration-300">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-xl" id="bottomPlayerAvatar">
+                            ♔
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="font-bold text-white text-sm" id="bottomPlayerName">You</span>
+                                <span class="text-xs text-indigo-400 font-mono" id="bottomPlayerRating">(1200)</span>
+                            </div>
+                            <div class="flex items-center space-x-2 text-xs text-slate-400">
+                                <div id="bottomPlayerGraveyard" class="flex items-center space-x-0.5 text-slate-300"></div>
+                                <span id="bottomPlayerAdvantage" class="font-bold text-emerald-400 text-xs"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 font-mono text-sm font-bold text-slate-200 shadow-inner" id="bottomPlayerClock">
+                        10:00
+                    </div>
+                </div>
             </div>
 
             <!-- Right Sidebar Controls & Action Log -->
             <div class="space-y-6">
-                <!-- Action Controls Panel (Dice roll / Bughouse reserve) -->
+                <!-- Action Controls Panel -->
                 <div id="actionControlsPanel" class="glass-panel p-5 rounded-2xl space-y-4">
-                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Controls</h3>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Game Actions</h3>
                     
+                    <!-- Chess Action Controls (Resign, Draw, Rematch) -->
+                    <div id="chessControls" class="grid grid-cols-3 gap-2">
+                        <button id="resignBtn" onclick="openResignModal()" class="py-2 px-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 font-semibold text-xs rounded-xl transition flex flex-col items-center justify-center space-y-1">
+                            <span>🚩</span>
+                            <span>Resign</span>
+                        </button>
+                        <button id="drawBtn" onclick="sendOfferDraw()" class="py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition flex flex-col items-center justify-center space-y-1">
+                            <span>🤝</span>
+                            <span>Offer Draw</span>
+                        </button>
+                        <button id="rematchBtn" onclick="sendRematch()" class="py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-semibold text-xs rounded-xl transition flex flex-col items-center justify-center space-y-1">
+                            <span>🔄</span>
+                            <span>Rematch</span>
+                        </button>
+                    </div>
+
+                    <!-- Emoji Reactions Bar -->
+                    <div class="pt-2 border-t border-slate-800">
+                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Reactions</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button onclick="sendReaction('👏')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">👏</button>
+                            <button onclick="sendReaction('👍')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">👍</button>
+                            <button onclick="sendReaction('😮')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">😮</button>
+                            <button onclick="sendReaction('😂')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">😂</button>
+                            <button onclick="sendReaction('😭')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">😭</button>
+                            <button onclick="sendReaction('🎯')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">🎯</button>
+                            <button onclick="sendReaction('🔥')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">🔥</button>
+                            <button onclick="sendReaction('🏆')" class="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg text-base transition hover:scale-110">🏆</button>
+                        </div>
+                    </div>
+
                     <!-- Ludo Controls -->
                     <div id="ludoControls" class="hidden space-y-3">
                         <button id="rollDiceBtn" onclick="sendRollDice()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
@@ -124,20 +206,39 @@
 
                     <!-- Bughouse Reserve Palette -->
                     <div id="bughouseReservePanel" class="hidden space-y-2">
-                        <span class="text-xs text-slate-400">Piece Reserve:</span>
+                        <span class="text-xs text-slate-400 font-semibold">Piece Reserve:</span>
                         <div id="reservePiecesList" class="flex flex-wrap gap-2">
                             <!-- Reserve pieces -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Match Log -->
-                <div class="glass-panel p-5 rounded-2xl space-y-3 max-h-60 overflow-y-auto">
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Match Log</h3>
+                <!-- PGN Move History / Match Log -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3 max-h-80 overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Move History (PGN)</h3>
+                        <span class="text-[10px] text-slate-400 font-mono">SAN</span>
+                    </div>
                     <div id="matchLogContainer" class="space-y-1 text-xs text-slate-300 font-mono">
                         <div>Match initialized.</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resign Confirmation Modal -->
+    <div id="resignModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="glass-panel max-w-sm w-full p-6 rounded-2xl space-y-4 border border-slate-700 shadow-2xl">
+            <h3 class="text-lg font-bold text-white">Confirm Resignation</h3>
+            <p class="text-xs text-slate-300">Are you sure you want to resign this match? Your opponent will be awarded the victory.</p>
+            <div class="flex items-center justify-end space-x-3 pt-2">
+                <button onclick="closeResignModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition">
+                    Cancel
+                </button>
+                <button onclick="confirmResign()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
+                    Yes, Resign
+                </button>
             </div>
         </div>
     </div>
