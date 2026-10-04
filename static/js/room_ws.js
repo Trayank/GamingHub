@@ -76,13 +76,38 @@ function renderLobby(data) {
     const isHost = data.players.some(p => p.is_host && p.reconnect_token === RECONNECT_TOKEN);
     const hostBadge = document.getElementById('hostBadge');
     const hostControls = document.getElementById('hostControls');
+    const toggleReadyBtn = document.getElementById('toggleReadyBtn');
+    const myPlayer = data.players.find(p => p.reconnect_token === RECONNECT_TOKEN);
+
+    if (myPlayer) {
+        toggleReadyBtn.innerText = myPlayer.is_ready ? '✓ Ready (Click to Unready)' : '⏳ Set Ready';
+        toggleReadyBtn.className = myPlayer.is_ready 
+            ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition'
+            : 'bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition';
+    }
+
+    const startBtn = document.getElementById('startGameBtn');
+    const reqCount = (data.game_type === 'CHESS_STANDARD') ? 2 : ((data.game_type === 'CHESS_4WAY' || data.game_type === 'CHESS_BUGHOUSE') ? 4 : 2);
+    const allReady = data.players.length >= reqCount && data.players.every(p => p.is_ready);
 
     if (isHost) {
         hostBadge.classList.remove('hidden');
         hostControls.classList.remove('hidden');
+        if (startBtn) {
+            startBtn.disabled = !allReady;
+            startBtn.className = allReady
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+                : "bg-slate-800 text-slate-500 border border-slate-700 font-bold py-2.5 px-8 rounded-xl cursor-not-allowed opacity-60";
+            startBtn.innerText = allReady ? "🚀 Start Game" : `Waiting for Ready (${data.players.length}/${data.max_players})`;
+        }
     } else {
         hostBadge.classList.add('hidden');
-        hostControls.classList.add('hidden');
+        hostControls.classList.remove('hidden');
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.className = "bg-slate-800 text-slate-400 border border-slate-700 font-semibold py-2.5 px-6 rounded-xl cursor-not-allowed opacity-80";
+            startBtn.innerText = "⏳ Waiting for host to start game...";
+        }
     }
 
     for (let i = 0; i < data.max_players; i++) {
@@ -110,7 +135,7 @@ function renderLobby(data) {
                     </div>
                 </div>
                 <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-                    <span class="text-xs font-semibold ${player.is_ready ? 'text-emerald-400' : 'text-slate-500'}">
+                    <span class="text-xs font-semibold ${player.is_ready ? 'text-emerald-400' : 'text-amber-400'}">
                         ${player.is_ready ? '✓ Ready' : '⏳ Not Ready'}
                     </span>
                     ${isHost && !isMe ? `<button onclick="sendKickPlayer(${i})" class="text-xs text-red-400 hover:text-red-300">Kick</button>` : ''}
@@ -129,6 +154,7 @@ function renderLobby(data) {
         grid.appendChild(card);
     }
 }
+
 
 function renderGame(data) {
     const turnBanner = document.getElementById('turnBanner');

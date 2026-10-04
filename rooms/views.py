@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseServerError
@@ -31,18 +32,26 @@ def create_room_view(request):
         except ValueError:
             max_players = 4
 
+        raw_rules = request.POST.get('rules_config', '{}')
+        rules_config = {}
+        if raw_rules:
+            try:
+                rules_config = json.loads(raw_rules) if isinstance(raw_rules, str) else raw_rules
+            except Exception:
+                rules_config = {}
+
         try:
             room = GameRoom.objects.create(
                 host_session_key=request.session.session_key or 'guest',
                 game_type=game_type,
                 variant=variant,
                 max_players=max_players,
+                rules_config=rules_config,
                 status='LOBBY'
             )
             return redirect('room_detail', room_code=room.code)
         except OperationalError as e:
             logger.error(f"OperationalError during room creation: {e}")
-            # Dynamic migration retry for Vercel cold boot with /tmp/db.sqlite3
             if os.getenv('VERCEL') and not os.getenv('DATABASE_URL'):
                 try:
                     call_command('migrate', interactive=False)
@@ -51,11 +60,12 @@ def create_room_view(request):
                         game_type=game_type,
                         variant=variant,
                         max_players=max_players,
+                        rules_config=rules_config,
                         status='LOBBY'
                     )
                     return redirect('room_detail', room_code=room.code)
                 except Exception as retry_err:
-                    logger.error(f"Room creation retry failed after migration: {retry_err}")
+                    logger.error(f"Room creation retry failed: {retry_err}")
             return HttpResponseServerError(f"Database error creating room: {e}")
         except Exception as e:
             logger.error(f"Unexpected error in create_room_view: {e}", exc_info=True)
@@ -70,7 +80,7 @@ def join_room_view(request):
             if GameRoom.objects.filter(code=code).exists():
                 return redirect('room_detail', room_code=code)
         except Exception as e:
-            logger.error(f"Error checking room code in join_room_view: {e}")
+            logger.error(f"Error checking room code: {e}")
     return redirect('home')
 
 def room_detail_view(request, room_code):

@@ -8,10 +8,14 @@ GAME_TYPE_CHOICES = [
     ('CHESS_STANDARD', 'Standard Chess (2 Players)'),
     ('CHESS_4WAY', '4-Way Chess (4 Players)'),
     ('CHESS_BUGHOUSE', 'Bughouse / Double Chess (4 Players)'),
+    ('CARD_UNO', 'Uno / Color Match'),
+    ('CARD_POKER', 'Texas Hold\'em Poker'),
+    ('CARD_BLACKJACK', 'Blackjack'),
+    ('CARD_RUMMY', 'Rummy'),
 ]
 
 ROOM_STATUS_CHOICES = [
-    ('LOBBY', 'Lobby'),
+    ('LOBBY', 'Waiting in Lobby'),
     ('PLAYING', 'In Progress'),
     ('FINISHED', 'Finished'),
 ]
@@ -26,13 +30,13 @@ def generate_room_code():
         except (OperationalError, ProgrammingError, Exception):
             return code
 
-
 class GameRoom(models.Model):
     code = models.CharField(max_length=6, unique=True, default=generate_room_code, db_index=True)
     host_session_key = models.CharField(max_length=128)
     game_type = models.CharField(max_length=32, choices=GAME_TYPE_CHOICES, default='LUDO')
     variant = models.CharField(max_length=32, default='4P')
     max_players = models.IntegerField(default=4)
+    rules_config = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=ROOM_STATUS_CHOICES, default='LOBBY')
     state_data = models.JSONField(default=dict, blank=True)
     turn_timer_sec = models.IntegerField(default=30)
@@ -56,6 +60,14 @@ class PlayerSession(models.Model):
 
     class Meta:
         unique_together = ('room', 'seat_index')
+
+    @property
+    def nickname(self):
+        return self.player_name
+
+    @property
+    def seat_number(self):
+        return self.seat_index
 
     def __str__(self):
         return f"{self.player_name} (Seat {self.seat_index} in {self.room.code})"
