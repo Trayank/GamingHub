@@ -81,7 +81,6 @@ CHANNEL_LAYERS = {
 }
 
 # Database
-# Parses DATABASE_URL if present (e.g. Postgres / Supabase / Neon), or falls back to SQLite
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 if DATABASE_URL:
@@ -90,14 +89,14 @@ if DATABASE_URL:
             default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
+            ssl_require=True,
         )
     }
 else:
-    DB_PATH = Path('/tmp/db.sqlite3') if IS_VERCEL else (BASE_DIR / 'db.sqlite3')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': DB_PATH,
+            'NAME': Path('/tmp/db.sqlite3') if os.getenv('VERCEL') else (BASE_DIR / 'db.sqlite3'),
         }
     }
 

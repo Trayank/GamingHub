@@ -8,8 +8,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gaminghub.settings')
 application = get_wsgi_application()
 app = application
 
-if os.getenv('VERCEL'):
+if os.getenv('VERCEL') and os.getenv('DATABASE_URL'):
     try:
+        from django.core.management import call_command
         call_command('migrate', interactive=False)
     except Exception as e:
-        logging.error(f"Cold boot database migration failed: {e}")
+        print(f"Startup migration notice: {e}")
