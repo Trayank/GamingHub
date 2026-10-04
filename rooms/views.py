@@ -5,24 +5,55 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseServerError
 from django.db import OperationalError
 from django.core.management import call_command
-from rooms.models import GameRoom, PlayerSession
+from rooms.models import GameRoom, PlayerSession, PlayerProfile, AVATAR_PRESETS
 
 logger = logging.getLogger(__name__)
 
-def home_view(request):
+def get_or_create_profile(request):
     if not request.session.session_key:
         try:
             request.session.create()
         except Exception as e:
             logger.warning(f"Session creation notice: {e}")
-    return render(request, 'rooms/home.html')
+
+    session_key = request.session.session_key or 'guest_session'
+    profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
+    return profile
+
+def home_view(request):
+    profile = get_or_create_profile(request)
+    context = {
+        'profile': profile,
+        'avatar_presets': AVATAR_PRESETS
+    }
+    return render(request, 'rooms/home.html', context)
+
+def update_profile_view(request):
+    if request.method == 'POST':
+        profile = get_or_create_profile(request)
+        display_name = request.POST.get('display_name', '').strip()
+        avatar = request.POST.get('avatar', '').strip()
+
+        if display_name:
+            profile.display_name = display_name
+        if avatar and avatar in AVATAR_PRESETS:
+            profile.avatar = avatar
+        profile.save()
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'status': 'ok',
+                'display_name': profile.display_name,
+                'avatar': profile.avatar,
+                'avatar_emoji': profile.avatar_emoji,
+                'win_rate': profile.win_rate,
+                'rating_elo': profile.rating_elo
+            })
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+    return redirect('home')
 
 def create_room_view(request):
-    if not request.session.session_key:
-        try:
-            request.session.create()
-        except Exception as e:
-            logger.warning(f"Session creation notice: {e}")
+    profile = get_or_create_profile(request)
 
     if request.method == 'POST':
         game_type = request.POST.get('game_type', 'LUDO')
@@ -42,7 +73,7 @@ def create_room_view(request):
 
         try:
             room = GameRoom.objects.create(
-                host_session_key=request.session.session_key or 'guest',
+                host_session_key=profile.session_key,
                 game_type=game_type,
                 variant=variant,
                 max_players=max_players,
@@ -56,7 +87,7 @@ def create_room_view(request):
                 try:
                     call_command('migrate', interactive=False)
                     room = GameRoom.objects.create(
-                        host_session_key=request.session.session_key or 'guest',
+                        host_session_key=profile.session_key,
                         game_type=game_type,
                         variant=variant,
                         max_players=max_players,
@@ -84,11 +115,7 @@ def join_room_view(request):
     return redirect('home')
 
 def room_detail_view(request, room_code):
-    if not request.session.session_key:
-        try:
-            request.session.create()
-        except Exception as e:
-            logger.warning(f"Session creation notice: {e}")
+    profile = get_or_create_profile(request)
 
     try:
         room = get_object_or_404(GameRoom, code=room_code.upper())
@@ -103,14 +130,16 @@ def room_detail_view(request, room_code):
         else:
             return HttpResponseServerError(f"Database error: {e}")
 
-    session_key = request.session.session_key
+    session_key = profile.session_key
     player_session = PlayerSession.objects.filter(room=room, session_key=session_key).first()
 
     context = {
         'room': room,
+        'profile': profile,
+        'avatar_presets': AVATAR_PRESETS,
         'session_key': session_key,
         'reconnect_token': str(player_session.reconnect_token) if player_session else '',
-        'player_name': player_session.player_name if player_session else '',
+        'player_name': player_session.player_name if player_session else profile.display_name,
         'seat_index': player_session.seat_index if player_session else -1
     }
     return render(request, 'rooms/room.html', context)

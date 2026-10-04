@@ -3,7 +3,8 @@ import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
-from rooms.models import GameRoom, PlayerSession, MatchHistory
+from rooms.models import GameRoom, PlayerSession, MatchHistory, PlayerProfile
+
 from games.registry import get_game_engine
 
 logger = logging.getLogger(__name__)
@@ -275,6 +276,11 @@ class RoomConsumer(AsyncWebsocketConsumer):
             room.save()
 
         player_name = f"Guest_{random.randint(1000, 9999)}"
+        if session_key:
+            profile = PlayerProfile.objects.filter(session_key=session_key).first()
+            if profile and profile.display_name:
+                player_name = profile.display_name
+
         colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink', 'lime', 'brown']
 
         session = PlayerSession.objects.create(
@@ -287,6 +293,7 @@ class RoomConsumer(AsyncWebsocketConsumer):
             is_ready=is_host,
             is_connected=True
         )
+
         return session
 
     @database_sync_to_async

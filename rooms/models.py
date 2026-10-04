@@ -20,6 +20,21 @@ ROOM_STATUS_CHOICES = [
     ('FINISHED', 'Finished'),
 ]
 
+AVATAR_PRESETS = {
+    'wizard': {'emoji': '🧙', 'label': 'Wizard'},
+    'dragon': {'emoji': '🐉', 'label': 'Dragon'},
+    'knight': {'emoji': '⚔️', 'label': 'Knight'},
+    'king': {'emoji': '👑', 'label': 'King'},
+    'queen': {'emoji': '👸', 'label': 'Queen'},
+    'dice_master': {'emoji': '🎲', 'label': 'Dice Master'},
+    'ninja': {'emoji': '🥷', 'label': 'Ninja'},
+    'cyber_bot': {'emoji': '🤖', 'label': 'Cyber Bot'},
+    'phoenix': {'emoji': '🔥', 'label': 'Phoenix'},
+    'alien': {'emoji': '👽', 'label': 'Alien'},
+    'pirate': {'emoji': '🏴‍☠️', 'label': 'Pirate'},
+    'champion': {'emoji': '🏆', 'label': 'Champion'}
+}
+
 def generate_room_code():
     chars = string.ascii_uppercase + string.digits
     while True:
@@ -29,6 +44,56 @@ def generate_room_code():
                 return code
         except (OperationalError, ProgrammingError, Exception):
             return code
+
+class PlayerProfile(models.Model):
+    session_key = models.CharField(max_length=128, unique=True, db_index=True)
+    user = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL)
+    display_name = models.CharField(max_length=64, default='')
+    avatar = models.CharField(max_length=64, default='wizard')
+    games_played = models.PositiveIntegerField(default=0)
+    games_won = models.PositiveIntegerField(default=0)
+    stats_by_game = models.JSONField(default=dict, blank=True)
+    rating_elo = models.IntegerField(default=1200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.display_name:
+            self.display_name = f"Player_{random.randint(1000, 9999)}"
+        super().save(*args, **kwargs)
+
+    @property
+    def win_rate(self) -> float:
+        if self.games_played == 0:
+            return 0.0
+        return round((self.games_won / self.games_played) * 100, 1)
+
+
+    @property
+    def avatar_emoji(self) -> str:
+        return AVATAR_PRESETS.get(self.avatar, {}).get('emoji', '🧙')
+
+    def record_match_result(self, game_type: str, won: bool = True):
+        self.games_played += 1
+        if won:
+            self.games_won += 1
+            self.rating_elo += 25
+        else:
+            self.rating_elo = max(100, self.rating_elo - 15)
+
+        stats = dict(self.stats_by_game or {})
+        game_stats = stats.get(game_type, {'played': 0, 'won': 0, 'lost': 0})
+        game_stats['played'] += 1
+        if won:
+            game_stats['won'] += 1
+        else:
+            game_stats['lost'] += 1
+        stats[game_type] = game_stats
+        self.stats_by_game = stats
+        self.save()
+
+    def __str__(self):
+        return f"{self.display_name} ({self.session_key[:8]})"
 
 class GameRoom(models.Model):
     code = models.CharField(max_length=6, unique=True, default=generate_room_code, db_index=True)

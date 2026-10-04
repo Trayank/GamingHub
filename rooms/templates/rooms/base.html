@@ -35,7 +35,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="min-h-full flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
-    <nav class="border-b border-slate-800 bg-slate-950/60 backdrop-blur sticky top-0 z-50">
+    <nav class="border-b border-slate-800 bg-slate-950/60 backdrop-blur sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <a href="{% url 'home' %}" class="flex items-center space-x-3 group">
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
@@ -43,10 +43,23 @@
                 </div>
                 <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">GamingHub</span>
             </a>
+
+            <!-- Right Profile Badge -->
             <div class="flex items-center space-x-4">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-2"></span> Real-Time Online
-                </span>
+                {% if profile %}
+                <button onclick="toggleProfileDrawer()" class="glass-panel hover:bg-slate-800/80 px-3.5 py-1.5 rounded-xl border border-slate-700/80 flex items-center space-x-3 transition transform active:scale-95">
+                    <span class="text-xl">{{ profile.avatar_emoji }}</span>
+                    <div class="text-left hidden sm:block">
+                        <div class="text-xs font-bold text-white leading-none">{{ profile.display_name }}</div>
+                        <div class="text-[10px] text-indigo-400 font-semibold mt-1">Win Rate: {{ profile.win_rate }}% | ELO: {{ profile.rating_elo }}</div>
+                    </div>
+                    <span class="text-slate-400 text-xs">⚙️</span>
+                </button>
+                {% else %}
+                <button onclick="toggleProfileDrawer()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition">
+                    👤 Profile
+                </button>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -58,6 +71,150 @@
     <footer class="border-t border-slate-800/80 py-6 text-center text-sm text-slate-500">
         <p>© 2026 GamingHub Real-Time Board Game Platform. Authoritative Server Engine.</p>
     </footer>
+
+    <!-- Profile & Settings Slide-Over Drawer -->
+    <div id="profileDrawer" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex justify-end">
+        <div class="glass-panel w-full max-w-md h-full p-6 sm:p-8 space-y-6 overflow-y-auto border-l border-slate-800 shadow-2xl relative">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <h3 class="text-xl font-bold text-white flex items-center space-x-2">
+                    <span>⚙️ Player Profile & Settings</span>
+                </h3>
+                <button onclick="toggleProfileDrawer()" class="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            <!-- Profile Edit Form -->
+            <form action="{% url 'update_profile' %}" method="POST" id="profileUpdateForm" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Display Name / Nickname</label>
+                    <input type="text" name="display_name" value="{{ profile.display_name|default:'' }}" required max="32" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Choose Avatar (12 Preset Icons)</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        {% for key, preset in avatar_presets.items %}
+                        <button type="button" onclick="selectAvatar('{{ key }}')" id="avatar_btn_{{ key }}" class="p-3 rounded-xl border text-2xl flex flex-col items-center justify-center transition {% if profile.avatar == key %}bg-indigo-600/30 border-indigo-500 text-white shadow-lg{% else %}bg-slate-800/60 border-slate-700 hover:border-slate-500 text-slate-300{% endif %}">
+                            <span>{{ preset.emoji }}</span>
+                            <span class="text-[9px] font-medium mt-1 truncate max-w-full text-slate-400">{{ preset.label }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" name="avatar" id="selectedAvatarInput" value="{{ profile.avatar|default:'wizard' }}">
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold rounded-xl shadow-lg transition">
+                    Save Profile Changes
+                </button>
+            </form>
+
+            <!-- Stats Overview -->
+            <div class="space-y-3 pt-4 border-t border-slate-800">
+                <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider">Lifetime Match Stats</h4>
+                <div class="grid grid-cols-2 gap-3 text-center">
+                    <div class="glass-panel p-3 rounded-xl border border-slate-700/60">
+                        <div class="text-2xl font-extrabold text-white">{{ profile.games_played|default:0 }}</div>
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Played</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-slate-700/60">
+                        <div class="text-2xl font-extrabold text-emerald-400">{{ profile.games_won|default:0 }}</div>
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Wins</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-slate-700/60">
+                        <div class="text-2xl font-extrabold text-indigo-400">{{ profile.win_rate|default:0 }}%</div>
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Win Rate</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-slate-700/60">
+                        <div class="text-2xl font-extrabold text-purple-400">{{ profile.rating_elo|default:1200 }}</div>
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Skill ELO</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Settings -->
+            <div class="space-y-3 pt-4 border-t border-slate-800">
+                <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider">Audio Settings</h4>
+                <div class="flex items-center justify-between glass-panel p-3 rounded-xl">
+                    <span class="text-xs text-slate-300 font-medium">Sound Effects (Move / Capture)</span>
+                    <input type="checkbox" id="sfxToggle" onchange="toggleSFX(this.checked)" checked class="w-4 h-4 accent-indigo-600 rounded">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- First-Time Onboarding Modal -->
+    {% if profile and profile.display_name|slice:":7" == "Player_" %}
+    <div id="onboardingModal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-md w-full p-6 sm:p-8 rounded-2xl shadow-2xl text-center space-y-6">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-4xl mx-auto">
+                👋
+            </div>
+            <div>
+                <h3 class="text-2xl font-bold text-white">Welcome to GamingHub!</h3>
+                <p class="text-xs text-slate-400 mt-1">Set your nickname & avatar before joining games.</p>
+            </div>
+
+            <form action="{% url 'update_profile' %}" method="POST" class="space-y-4 text-left">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Your Display Name</label>
+                    <input type="text" name="display_name" placeholder="e.g. ShadowKnight" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Select Avatar</label>
+                    <select name="avatar" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white">
+                        <option value="wizard">🧙 Wizard</option>
+                        <option value="dragon">🐉 Dragon</option>
+                        <option value="knight">⚔️ Knight</option>
+                        <option value="king">👑 King</option>
+                        <option value="queen">👸 Queen</option>
+                        <option value="dice_master">🎲 Dice Master</option>
+                        <option value="ninja">🥷 Ninja</option>
+                        <option value="cyber_bot">🤖 Cyber Bot</option>
+                        <option value="phoenix">🔥 Phoenix</option>
+                        <option value="alien">👽 Alien</option>
+                        <option value="pirate">🏴‍☠️ Pirate</option>
+                        <option value="champion">🏆 Champion</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold rounded-xl shadow-lg transition">
+                    Get Started →
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+    function toggleProfileDrawer() {
+        const drawer = document.getElementById('profileDrawer');
+        drawer.classList.toggle('hidden');
+    }
+
+    function selectAvatar(key) {
+        document.getElementById('selectedAvatarInput').value = key;
+        const btns = document.querySelectorAll('[id^="avatar_btn_"]');
+        btns.forEach(btn => {
+            btn.className = 'p-3 rounded-xl border text-2xl flex flex-col items-center justify-center transition bg-slate-800/60 border-slate-700 hover:border-slate-500 text-slate-300';
+        });
+        const activeBtn = document.getElementById(`avatar_btn_${key}`);
+        if (activeBtn) {
+            activeBtn.className = 'p-3 rounded-xl border text-2xl flex flex-col items-center justify-center transition bg-indigo-600/30 border-indigo-500 text-white shadow-lg';
+        }
+    }
+
+    function toggleSFX(enabled) {
+        localStorage.setItem('audio_sfx_enabled', enabled ? 'true' : 'false');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const sfx = localStorage.getItem('audio_sfx_enabled');
+        if (sfx !== null) {
+            const toggle = document.getElementById('sfxToggle');
+            if (toggle) toggle.checked = (sfx === 'true');
+        }
+    });
+    </script>
 
     {% block extra_scripts %}{% endblock %}
 </body>
