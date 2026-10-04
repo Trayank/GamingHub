@@ -1,7 +1,7 @@
 import uuid
 import random
 import string
-from django.db import models
+from django.db import models, OperationalError, ProgrammingError
 
 GAME_TYPE_CHOICES = [
     ('LUDO', 'Ludo'),
@@ -20,8 +20,12 @@ def generate_room_code():
     chars = string.ascii_uppercase + string.digits
     while True:
         code = ''.join(random.choices(chars, k=6))
-        if not GameRoom.objects.filter(code=code).exists():
+        try:
+            if not GameRoom.objects.filter(code=code).exists():
+                return code
+        except (OperationalError, ProgrammingError, Exception):
             return code
+
 
 class GameRoom(models.Model):
     code = models.CharField(max_length=6, unique=True, default=generate_room_code, db_index=True)
