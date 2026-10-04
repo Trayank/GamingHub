@@ -1,35 +1,56 @@
 import os
 import json
+import uuid
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseServerError
 from django.db import OperationalError, ProgrammingError
 from django.core.management import call_command
+from django.views.decorators.cache import never_cache
 from rooms.models import GameRoom, PlayerSession, PlayerProfile, AVATAR_PRESETS
 
 logger = logging.getLogger(__name__)
 
 def get_or_create_profile(request):
-    if not request.session.session_key:
-        try:
-            request.session.create()
-        except Exception as e:
-            logger.warning(f"Session creation notice: {e}")
+    # Ensure session exists and generate a persistent UUID for this visitor
+    player_uuid = request.session.get('player_uuid')
+    if not player_uuid:
+        player_uuid = str(uuid.uuid4())
+        request.session['player_uuid'] = player_uuid
+        request.session.modified = True
 
-    session_key = request.session.session_key or 'guest_session'
     try:
-        profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
+        # Clean up legacy orphaned profiles with empty or generic keys
+        PlayerProfile.objects.filter(session_key__in=['guest_session', 'None', '', None]).delete()
+    except Exception:
+        pass
+
+    try:
+        profile, created = PlayerProfile.objects.get_or_create(
+            session_key=player_uuid,
+            defaults={
+                'display_name': f"Player_{player_uuid[:4].upper()}",
+                'avatar': 'wizard'
+            }
+        )
         return profile
     except (OperationalError, ProgrammingError) as e:
         logger.warning(f"PlayerProfile database table missing ({e}). Executing auto-migration fallback...")
         try:
             call_command('migrate', interactive=False)
-            profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
+            profile, created = PlayerProfile.objects.get_or_create(
+                session_key=player_uuid,
+                defaults={
+                    'display_name': f"Player_{player_uuid[:4].upper()}",
+                    'avatar': 'wizard'
+                }
+            )
             return profile
         except Exception as retry_err:
             logger.error(f"Failed auto-migration or profile retrieval: {retry_err}")
-            return PlayerProfile(session_key=session_key, display_name="Guest", avatar="wizard")
+            return PlayerProfile(session_key=player_uuid, display_name=f"Player_{player_uuid[:4].upper()}", avatar="wizard")
 
+@never_cache
 def home_view(request):
     profile = get_or_create_profile(request)
     context = {
@@ -38,6 +59,7 @@ def home_view(request):
     }
     return render(request, 'rooms/home.html', context)
 
+@never_cache
 def update_profile_view(request):
     if request.method == 'POST':
         profile = get_or_create_profile(request)
@@ -62,6 +84,7 @@ def update_profile_view(request):
         return redirect(request.META.get('HTTP_REFERER', 'home'))
     return redirect('home')
 
+@never_cache
 def create_room_view(request):
     profile = get_or_create_profile(request)
 
@@ -114,6 +137,7 @@ def create_room_view(request):
 
     return redirect('home')
 
+@never_cache
 def join_room_view(request):
     code = request.POST.get('room_code', '').strip().upper()
     if code:
@@ -124,6 +148,7 @@ def join_room_view(request):
             logger.error(f"Error checking room code: {e}")
     return redirect('home')
 
+@never_cache
 def room_detail_view(request, room_code):
     profile = get_or_create_profile(request)
 
