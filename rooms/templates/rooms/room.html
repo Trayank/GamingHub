@@ -1,0 +1,162 @@
+{% extends "rooms/base.html" %}
+
+{% block title %}Room {{ room.code }} - GamingHub{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto w-full space-y-6">
+    <!-- Top Bar -->
+    <div class="glass-panel p-4 sm:p-6 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+            <a href="{% url 'home' %}" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+                ← Exit
+            </a>
+            <div>
+                <div class="flex items-center space-x-3">
+                    <h1 class="text-2xl font-bold text-white tracking-tight">Room <span class="font-mono text-indigo-400">{{ room.code }}</span></h1>
+                    <button onclick="copyJoinLink()" class="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold rounded-lg transition flex items-center space-x-1">
+                        <span>📋 Copy Link</span>
+                    </button>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">
+                    Game: <span class="text-slate-200 font-medium" id="gameTypeBadge">{{ room.get_game_type_display }}</span> |
+                    Variant: <span class="text-slate-200 font-medium" id="variantBadge">{{ room.variant }}</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div id="wsStatusBadge" class="flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                <span>Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="errorToast" class="hidden glass-panel border-red-500/30 bg-red-500/10 text-red-200 p-4 rounded-xl flex justify-between items-center">
+        <span id="errorMessage">An error occurred.</span>
+        <button onclick="document.getElementById('errorToast').classList.add('hidden')" class="text-red-400 hover:text-white">✕</button>
+    </div>
+
+    <!-- LOBBY VIEW -->
+    <div id="lobbyView" class="space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl space-y-6">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Match Lobby</h2>
+                    <p class="text-xs text-slate-400">Pick your seat and color. The host will start the game once everyone is ready.</p>
+                </div>
+                <div id="hostBadge" class="hidden px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                    👑 You are the Host
+                </div>
+            </div>
+
+            <!-- Player Seats Grid -->
+            <div id="playerSeatsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Dynamically populated seats -->
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                <div class="flex items-center space-x-4">
+                    <button id="toggleReadyBtn" onclick="sendToggleReady()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition">
+                        ✓ Set Ready
+                    </button>
+                    <div id="seatSelectorContainer" class="flex items-center space-x-2">
+                        <span class="text-xs text-slate-400 font-medium">Color:</span>
+                        <select id="colorPicker" onchange="sendSelectSeat()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                            <option value="red">Red</option>
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="purple">Purple</option>
+                            <option value="orange">Orange</option>
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="hostControls" class="hidden flex items-center space-x-4">
+                    <button id="startGameBtn" onclick="sendStartGame()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                        🚀 Start Game
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME VIEW -->
+    <div id="gameView" class="hidden space-y-6">
+        <!-- Turn Status Banner -->
+        <div id="turnBanner" class="glass-panel p-4 rounded-xl flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div id="currentTurnColorIndicator" class="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
+                <span id="turnStatusText" class="text-lg font-bold text-white">Turn: Player 1</span>
+            </div>
+            <div id="lastActionText" class="text-xs text-slate-400 max-w-md truncate">
+                Game in progress...
+            </div>
+        </div>
+
+        <!-- Canvas & Controls Container -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Board Canvas -->
+            <div class="lg:col-span-3 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center min-h-[500px] relative">
+                <canvas id="gameBoardCanvas" width="600" height="600" class="max-w-full h-auto border border-slate-700/50 rounded-xl bg-slate-950 shadow-2xl cursor-pointer"></canvas>
+            </div>
+
+            <!-- Right Sidebar Controls & Action Log -->
+            <div class="space-y-6">
+                <!-- Action Controls Panel (Dice roll / Bughouse reserve) -->
+                <div id="actionControlsPanel" class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Controls</h3>
+                    
+                    <!-- Ludo Controls -->
+                    <div id="ludoControls" class="hidden space-y-3">
+                        <button id="rollDiceBtn" onclick="sendRollDice()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
+                            🎲 Roll Dice
+                        </button>
+                        <div id="diceDisplay" class="hidden text-center p-4 bg-slate-800 rounded-xl border border-slate-700">
+                            <span id="diceValueText" class="text-4xl font-extrabold text-indigo-400">?</span>
+                        </div>
+                    </div>
+
+                    <!-- Bughouse Reserve Palette -->
+                    <div id="bughouseReservePanel" class="hidden space-y-2">
+                        <span class="text-xs text-slate-400">Piece Reserve:</span>
+                        <div id="reservePiecesList" class="flex flex-wrap gap-2">
+                            <!-- Reserve pieces -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Match Log -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3 max-h-60 overflow-y-auto">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Match Log</h3>
+                    <div id="matchLogContainer" class="space-y-1 text-xs text-slate-300 font-mono">
+                        <div>Match initialized.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ROOM_CODE = "{{ room.code }}";
+    const SESSION_KEY = "{{ session_key }}";
+    let RECONNECT_TOKEN = localStorage.getItem(`reconnect_token_${ROOM_CODE}`) || "{{ reconnect_token }}";
+</script>
+
+<script src="/static/js/ludo_render.js"></script>
+<script src="/static/js/chess_render.js"></script>
+<script src="/static/js/room_ws.js"></script>
+
+<script>
+function copyJoinLink() {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Room link copied to clipboard!');
+}
+</script>
+{% endblock %}

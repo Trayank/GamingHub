@@ -1,0 +1,113 @@
+{% extends "rooms/base.html" %}
+
+{% block title %}GamingHub - Play Real-Time Board Games with Friends{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto w-full my-auto space-y-12">
+    <!-- Hero Header -->
+    <div class="text-center space-y-4">
+        <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm font-medium">
+            <span>✨ Real-Time Server-Authoritative Gameplay</span>
+        </div>
+        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
+            Play Ludo & Chess<br>
+            <span class="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">With Friends Anywhere</span>
+        </h1>
+        <p class="text-slate-400 text-lg max-w-2xl mx-auto">
+            Create private rooms, share a 6-character room code, and experience zero-latency multiplayer with dynamic Ludo (2–10 players), 4-Way Chess, & Bughouse.
+        </p>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Create Room Card -->
+        <div class="glass-panel p-8 rounded-2xl shadow-xl flex flex-col justify-between relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
+            <div>
+                <div class="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-2xl mb-6">
+                    ➕
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Create Private Room</h2>
+                <p class="text-slate-400 text-sm mb-6">Host a game and invite your friends with a shareable room code.</p>
+
+                <form action="{% url 'create_room' %}" method="POST" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Game Type</label>
+                        <select id="gameTypeSelect" name="game_type" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" onchange="updateVariantOptions()">
+                            <option value="LUDO">🎲 Ludo (2 - 10 Players)</option>
+                            <option value="CHESS_STANDARD">♟️ Standard Chess (2 Players)</option>
+                            <option value="CHESS_4WAY">⚔️ 4-Way Chess (4 Players)</option>
+                            <option value="CHESS_BUGHOUSE">🔄 Bughouse / Double Chess (4 Players)</option>
+                        </select>
+                    </div>
+
+                    <div id="variantContainer">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Max Players / Variant</label>
+                        <select id="maxPlayersSelect" name="max_players" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                            <option value="4">4 Players</option>
+                            <option value="2">2 Players</option>
+                            <option value="3">3 Players</option>
+                            <option value="5">5 Players</option>
+                            <option value="6">6 Players</option>
+                            <option value="8">8 Players</option>
+                            <option value="10">10 Players</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-600/30 transition-all transform active:scale-[0.98]">
+                        Create Room & Get Code →
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Join Room Card -->
+        <div class="glass-panel p-8 rounded-2xl shadow-xl flex flex-col justify-between relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl"></div>
+            <div>
+                <div class="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-2xl mb-6">
+                    🔑
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Join Existing Room</h2>
+                <p class="text-slate-400 text-sm mb-6">Enter a 6-character room code from your friend to jump straight into the lobby.</p>
+
+                <form action="{% url 'join_room' %}" method="POST" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Room Code</label>
+                        <input type="text" name="room_code" placeholder="e.g. X7K9P2" uppercase maxlength="6" required class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-center text-2xl font-mono tracking-widest text-white uppercase placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
+                    </div>
+
+                    <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold py-3.5 px-6 rounded-xl transition transform active:scale-[0.98]">
+                        Join Room →
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateVariantOptions() {
+    const gameType = document.getElementById('gameTypeSelect').value;
+    const maxSelect = document.getElementById('maxPlayersSelect');
+
+    if (gameType === 'CHESS_STANDARD') {
+        maxSelect.innerHTML = '<option value="2">2 Players</option>';
+    } else if (gameType === 'CHESS_4WAY' || gameType === 'CHESS_BUGHOUSE') {
+        maxSelect.innerHTML = '<option value="4">4 Players</option>';
+    } else {
+        maxSelect.innerHTML = `
+            <option value="4">4 Players</option>
+            <option value="2">2 Players</option>
+            <option value="3">3 Players</option>
+            <option value="5">5 Players</option>
+            <option value="6">6 Players</option>
+            <option value="8">8 Players</option>
+            <option value="10">10 Players</option>
+        `;
+    }
+}
+</script>
+{% endblock %}

@@ -1,109 +1,69 @@
+import uuid
 import random
 import string
 from django.db import models
-from django.conf import settings
 
+GAME_TYPE_CHOICES = [
+    ('LUDO', 'Ludo'),
+    ('CHESS_STANDARD', 'Standard Chess (2 Players)'),
+    ('CHESS_4WAY', '4-Way Chess (4 Players)'),
+    ('CHESS_BUGHOUSE', 'Bughouse / Double Chess (4 Players)'),
+]
 
-def generate_room_code(length=6):
-    """Generates a unique 6-character uppercase alphanumeric room code."""
-    characters = string.ascii_uppercase + string.digits
-    characters = characters.replace('O', '').replace('0', '').replace('I', '').replace('1', '')
-    return ''.join(random.choices(characters, k=length))
+ROOM_STATUS_CHOICES = [
+    ('LOBBY', 'Lobby'),
+    ('PLAYING', 'In Progress'),
+    ('FINISHED', 'Finished'),
+]
 
+def generate_room_code():
+    chars = string.ascii_uppercase + string.digits
+    while True:
+        code = ''.join(random.choices(chars, k=6))
+        if not GameRoom.objects.filter(code=code).exists():
+            return code
 
-class Room(models.Model):
-    class GameType(models.TextChoices):
-        TIC_TAC_TOE = 'tic_tac_toe', 'Tic-Tac-Toe'
-        ROCK_PAPER_SCISSORS = 'rock_paper_scissors', 'Rock Paper Scissors'
-        CONNECT_FOUR = 'connect_four', 'Connect Four'
-
-    class Status(models.TextChoices):
-        WAITING = 'waiting', 'Waiting for Players'
-        IN_PROGRESS = 'in_progress', 'Game In Progress'
-        FINISHED = 'finished', 'Game Finished'
-
-    code = models.CharField(
-        max_length=6,
-        unique=True,
-        db_index=True,
-        editable=False,
-        help_text="Unique 6-character room code."
-    )
-    host = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='hosted_rooms'
-    )
-    host_session_key = models.CharField(max_length=100, blank=True, default="")
-    game_type = models.CharField(
-        max_length=50,
-        choices=GameType.choices,
-        default=GameType.TIC_TAC_TOE
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.WAITING
-    )
-    max_players = models.PositiveIntegerField(default=2)
-    is_private = models.BooleanField(default=True)
+class GameRoom(models.Model):
+    code = models.CharField(max_length=6, unique=True, default=generate_room_code, db_index=True)
+    host_session_key = models.CharField(max_length=128)
+    game_type = models.CharField(max_length=32, choices=GAME_TYPE_CHOICES, default='LUDO')
+    variant = models.CharField(max_length=32, default='4P')
+    max_players = models.IntegerField(default=4)
+    status = models.CharField(max_length=16, choices=ROOM_STATUS_CHOICES, default='LOBBY')
+    state_data = models.JSONField(default=dict, blank=True)
+    turn_timer_sec = models.IntegerField(default=30)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def save(self, *args, **kwargs):
-        if not self.code:
-            code = generate_room_code()
-            while Room.objects.filter(code=code).exists():
-                code = generate_room_code()
-            self.code = code
-        super().save(*args, **kwargs)
-
-    @property
-    def player_count(self):
-        return self.players.count()
-
-    @property
-    def is_full(self):
-        return self.player_count >= self.max_players
-
-    def get_next_slot_index(self):
-        occupied_slots = set(self.players.values_list('slot_index', flat=True))
-        for slot in range(self.max_players):
-            if slot not in occupied_slots:
-                return slot
-        return occupied_slots.__len__()
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Room {self.code} ({self.game_type}) - {self.get_status_display()}"
+        return f"Room {self.code} ({self.game_type} - {self.status})"
 
-
-class Player(models.Model):
-    room = models.ForeignKey(
-        Room,
-        on_delete=models.CASCADE,
-        related_name='players'
-    )
-    name = models.CharField(max_length=50)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='room_players'
-    )
-    session_key = models.CharField(max_length=100, blank=True, default="")
+class PlayerSession(models.Model):
+    room = models.ForeignKey(GameRoom, on_delete=models.CASCADE, related_name='players')
+    session_key = models.CharField(max_length=128)
+    reconnect_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    player_name = models.CharField(max_length=64)
+    seat_index = models.IntegerField(default=0)
+    color = models.CharField(max_length=32, default='red')
     is_host = models.BooleanField(default=False)
     is_ready = models.BooleanField(default=False)
-    slot_index = models.PositiveIntegerField(default=0)
-    joined_at = models.DateTimeField(auto_now_add=True)
+    is_connected = models.BooleanField(default=True)
+    disconnected_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['slot_index']
+        unique_together = ('room', 'seat_index')
 
     def __str__(self):
-        return f"{self.name} (Slot {self.slot_index}) in {self.room.code}"
+        return f"{self.player_name} (Seat {self.seat_index} in {self.room.code})"
 
+class MatchHistory(models.Model):
+    room_code = models.CharField(max_length=6)
+    game_type = models.CharField(max_length=32)
+    variant = models.CharField(max_length=32)
+    winner_info = models.JSONField(default=dict)
+    players_summary = models.JSONField(default=list)
+    duration_seconds = models.IntegerField(default=0)
+    ended_at = models.DateTimeField(auto_now_add=True)
 
-# Backward compatibility alias for RoomPlayer if referenced
-RoomPlayer = Player
+    def __str__(self):
+        return f"Match {self.room_code} - {self.game_type} ({self.ended_at})"

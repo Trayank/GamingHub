@@ -1,1 +1,1 @@
-# games app package
+# Games package

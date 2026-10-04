@@ -1,15 +1,9 @@
 from django.urls import path
-from . import views
-from games import views as game_views
-
-app_name = 'rooms'
+from rooms import views
 
 urlpatterns = [
-    path('', views.lobby_view, name='lobby'),
-    path('create/', views.create_room_view, name='create'),
-    path('join/', views.join_room_view, name='join'),
-    path('<str:room_code>/', views.room_detail_view, name='room_detail'),
-    path('<str:room_code>/play/', game_views.tictactoe_play_view, name='tictactoe_play'),
-    path('<str:room_code>/trivia/', game_views.trivia_play_view, name='trivia_play'),
-    path('<str:room_code>/ludo/', game_views.ludo_play_view, name='ludo_play'),
+    path('', views.home_view, name='home'),
+    path('create/', views.create_room_view, name='create_room'),
+    path('join/', views.join_room_view, name='join_room'),
+    path('room/<str:room_code>/', views.room_detail_view, name='room_detail'),
 ]
