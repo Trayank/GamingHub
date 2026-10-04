@@ -3,7 +3,7 @@ import json
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseServerError
-from django.db import OperationalError
+from django.db import OperationalError, ProgrammingError
 from django.core.management import call_command
 from rooms.models import GameRoom, PlayerSession, PlayerProfile, AVATAR_PRESETS
 
@@ -17,8 +17,18 @@ def get_or_create_profile(request):
             logger.warning(f"Session creation notice: {e}")
 
     session_key = request.session.session_key or 'guest_session'
-    profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
-    return profile
+    try:
+        profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
+        return profile
+    except (OperationalError, ProgrammingError) as e:
+        logger.warning(f"PlayerProfile database table missing ({e}). Executing auto-migration fallback...")
+        try:
+            call_command('migrate', interactive=False)
+            profile, created = PlayerProfile.objects.get_or_create(session_key=session_key)
+            return profile
+        except Exception as retry_err:
+            logger.error(f"Failed auto-migration or profile retrieval: {retry_err}")
+            return PlayerProfile(session_key=session_key, display_name="Guest", avatar="wizard")
 
 def home_view(request):
     profile = get_or_create_profile(request)
