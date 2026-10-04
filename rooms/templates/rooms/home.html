@@ -4,6 +4,13 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto w-full my-auto space-y-10">
+    {% if error_msg %}
+    <div class="glass-panel border-red-500/30 bg-red-500/10 text-red-200 p-4 rounded-xl flex justify-between items-center max-w-2xl mx-auto shadow-lg">
+        <span class="text-sm font-semibold">⚠️ {{ error_msg }}</span>
+        <a href="{% url 'home' %}" class="text-red-400 hover:text-white font-bold ml-4">✕</a>
+    </div>
+    {% endif %}
+
     <!-- Hero Header -->
     <div class="text-center space-y-3">
         <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm font-medium">

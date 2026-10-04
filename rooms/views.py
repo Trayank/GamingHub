@@ -138,28 +138,43 @@ def create_room_view(request):
     return redirect('home')
 
 @never_cache
+def home_view(request):
+    profile = get_or_create_profile(request)
+    error_msg = request.GET.get('error', '')
+    context = {
+        'profile': profile,
+        'avatar_presets': AVATAR_PRESETS,
+        'error_msg': error_msg
+    }
+    return render(request, 'rooms/home.html', context)
+
+@never_cache
 def join_room_view(request):
     code = request.POST.get('room_code', '').strip().upper()
     if code:
         try:
-            if GameRoom.objects.filter(code=code).exists():
+            if GameRoom.objects.filter(code__iexact=code).exists():
                 return redirect('room_detail', room_code=code)
         except Exception as e:
             logger.error(f"Error checking room code: {e}")
     return redirect('home')
 
 @never_cache
-def room_detail_view(request, room_code):
+def room_detail_view(request, room_code, game_type=None):
     profile = get_or_create_profile(request)
 
+    from django.http import Http404
     try:
-        room = get_object_or_404(GameRoom, code=room_code.upper())
+        room = get_object_or_404(GameRoom, code__iexact=room_code)
+    except Http404:
+        logger.warning(f"Room {room_code} not found. Redirecting to home.")
+        return redirect('/?error=Room+session+expired+or+server+restarted.+Please+create+a+new+room.')
     except OperationalError as e:
         logger.error(f"OperationalError in room_detail_view: {e}")
         if os.getenv('VERCEL') and not os.getenv('DATABASE_URL'):
             try:
                 call_command('migrate', interactive=False)
-                room = get_object_or_404(GameRoom, code=room_code.upper())
+                room = get_object_or_404(GameRoom, code__iexact=room_code)
             except Exception as retry_err:
                 return HttpResponseServerError(f"Database error: {retry_err}")
         else:
@@ -213,8 +228,9 @@ from django.views.decorators.csrf import csrf_exempt
 @never_cache
 def room_status_api(request, room_code):
     profile = get_or_create_profile(request)
+    from django.http import Http404
     try:
-        room = get_object_or_404(GameRoom, code=room_code.upper())
+        room = get_object_or_404(GameRoom, code__iexact=room_code)
         player_uuid = profile.session_key
         is_current_user_host = (player_uuid == room.host_session_key)
 
@@ -233,7 +249,7 @@ def room_status_api(request, room_code):
 
         can_start = (len(players_data) >= 2) and all(p["is_ready"] for p in players_data)
         status_str = "in_progress" if room.status in ['PLAYING', 'in_progress'] else "waiting"
-        game_url = f"/room/{room.code}/"
+        game_url = f"/games/{room.game_type.lower()}/{room.code}/"
 
         return JsonResponse({
             "status": status_str,
@@ -246,6 +262,8 @@ def room_status_api(request, room_code):
             "can_start": can_start,
             "game_url": game_url
         })
+    except Http404:
+        return JsonResponse({"error": "Room not found or expired"}, status=404)
     except Exception as e:
         logger.error(f"Error in room_status_api: {e}")
         return JsonResponse({"error": str(e)}, status=500)
@@ -254,14 +272,17 @@ def room_status_api(request, room_code):
 @never_cache
 def toggle_ready_api(request, room_code):
     profile = get_or_create_profile(request)
+    from django.http import Http404
     try:
-        room = get_object_or_404(GameRoom, code=room_code.upper())
+        room = get_object_or_404(GameRoom, code__iexact=room_code)
         player_session = PlayerSession.objects.filter(room=room, session_key=profile.session_key).first()
         if player_session:
             player_session.is_ready = not player_session.is_ready
             player_session.save()
             return JsonResponse({'status': 'ok', 'is_ready': player_session.is_ready})
         return JsonResponse({'status': 'error', 'message': 'Player session not found'}, status=404)
+    except Http404:
+        return JsonResponse({'status': 'error', 'message': 'Room not found or expired'}, status=404)
     except Exception as e:
         logger.error(f"Error in toggle_ready_api: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
@@ -270,8 +291,9 @@ def toggle_ready_api(request, room_code):
 @never_cache
 def start_game_api(request, room_code):
     profile = get_or_create_profile(request)
+    from django.http import Http404
     try:
-        room = get_object_or_404(GameRoom, code=room_code.upper())
+        room = get_object_or_404(GameRoom, code__iexact=room_code)
         if profile.session_key != room.host_session_key:
             return JsonResponse({'success': False, 'error': 'Only host can start the game'}, status=403)
 
@@ -290,8 +312,10 @@ def start_game_api(request, room_code):
                     seats_info=seats_info
                 )
         room.save()
-        redirect_url = f"/room/{room.code}/"
+        redirect_url = f"/games/{room.game_type.lower()}/{room.code}/"
         return JsonResponse({'success': True, 'redirect_url': redirect_url})
+    except Http404:
+        return JsonResponse({'success': False, 'error': 'Room not found or expired'}, status=404)
     except Exception as e:
         logger.error(f"Error in start_game_api: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

@@ -293,8 +293,15 @@ function fetchStatusAndUpdateLobby() {
     fetch(`/room/${ROOM_CODE}/status/`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(res => res.json())
+    .then(res => {
+        if (res.status === 404) {
+            window.location.href = '/?error=Room+session+expired+or+server+restarted.';
+            return;
+        }
+        return res.json();
+    })
     .then(data => {
+        if (!data) return;
         if (data.status === 'in_progress' || data.status === 'PLAYING') {
             const lobbyView = document.getElementById('lobbyView');
             const gameView = document.getElementById('gameView');
@@ -418,7 +425,11 @@ function sendStartGame() {
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            fetchStatusAndUpdateLobby();
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            } else {
+                fetchStatusAndUpdateLobby();
+            }
         } else {
             showError(data.error || 'Failed to start game');
         }
