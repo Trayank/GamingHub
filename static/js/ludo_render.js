@@ -17,7 +17,6 @@ function playLudoSound(type) {
     gain.connect(ludoAudioCtx.destination);
 
     if (type === 'dice') {
-        // Noise / Rattling 3D dice roll
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(450, now);
         osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
@@ -26,7 +25,6 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.15);
     } else if (type === 'step') {
-        // Pop-pop wooden tile hop
         osc.type = 'sine';
         osc.frequency.setValueAtTime(600, now);
         osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
@@ -35,7 +33,6 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.08);
     } else if (type === 'capture') {
-        // Capture spin & thud
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(800, now);
         osc.frequency.exponentialRampToValueAtTime(120, now + 0.25);
@@ -44,7 +41,6 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.25);
     } else if (type === 'home') {
-        // Triumph home chord
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(523.25, now); // C5
         osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
@@ -54,7 +50,6 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.4);
     } else if (type === 'win') {
-        // Victory Fanfare
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(523, now);
         osc.frequency.setValueAtTime(659, now + 0.15);
@@ -65,7 +60,6 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.8);
     } else if (type === 'phrase') {
-        // Speech Bubble Chime
         osc.type = 'sine';
         osc.frequency.setValueAtTime(880, now);
         osc.frequency.setValueAtTime(1174, now + 0.08);
@@ -74,6 +68,88 @@ function playLudoSound(type) {
         osc.start(now);
         osc.stop(now + 0.2);
     }
+}
+
+// 52 Main Circuit Track Coordinates on 15x15 Ludo Grid (Clockwise starting from Red entry square r=8, c=1)
+const TRACK_COORDS_52 = [
+    // Red Arm to Blue Arm (0..12)
+    {r:8, c:1},  // 0: Red Start (Tile 1 / offset 0)
+    {r:8, c:2},  // 1
+    {r:8, c:3},  // 2
+    {r:8, c:4},  // 3
+    {r:8, c:5},  // 4
+    {r:9, c:6},  // 5
+    {r:10, c:6}, // 6
+    {r:11, c:6}, // 7
+    {r:12, c:6}, // 8: Red Star (Tile 8 / index 7)
+    {r:13, c:6}, // 9
+    {r:14, c:6}, // 10
+    {r:14, c:7}, // 11
+    {r:14, c:8}, // 12
+
+    // Blue Arm to Yellow Arm (13..25)
+    {r:13, c:8}, // 13: Blue Start (Tile 14 / offset 13)
+    {r:12, c:8}, // 14
+    {r:11, c:8}, // 15
+    {r:10, c:8}, // 16
+    {r:9, c:8},  // 17
+    {r:8, c:9},  // 18
+    {r:8, c:10}, // 19
+    {r:8, c:11}, // 20
+    {r:8, c:12}, // 21: Blue Star (Tile 21 / index 20)
+    {r:8, c:13}, // 22
+    {r:8, c:14}, // 23
+    {r:7, c:14}, // 24
+    {r:6, c:14}, // 25
+
+    // Yellow Arm to Green Arm (26..38)
+    {r:6, c:13}, // 26: Yellow Start (Tile 27 / offset 26)
+    {r:6, c:12}, // 27
+    {r:6, c:11}, // 28
+    {r:6, c:10}, // 29
+    {r:6, c:9},  // 30
+    {r:5, c:8},  // 31
+    {r:4, c:8},  // 32
+    {r:3, c:8},  // 33
+    {r:2, c:8},  // 34: Yellow Star (Tile 34 / index 33)
+    {r:1, c:8},  // 35
+    {r:0, c:8},  // 36
+    {r:0, c:7},  // 37
+    {r:0, c:6},  // 38
+
+    // Green Arm to Red Arm (39..51)
+    {r:1, c:6},  // 39: Green Start (Tile 40 / offset 39)
+    {r:2, c:6},  // 40
+    {r:3, c:6},  // 41
+    {r:4, c:6},  // 42
+    {r:5, c:6},  // 43
+    {r:6, c:5},  // 44
+    {r:6, c:4},  // 45
+    {r:6, c:3},  // 46
+    {r:6, c:2},  // 47: Green Star (Tile 47 / index 46)
+    {r:6, c:1},  // 48
+    {r:6, c:0},  // 49
+    {r:7, c:0},  // 50
+    {r:8, c:0}   // 51
+];
+
+function getStandardGridCoords(seatIdx, state, pos) {
+    if (state === 'TRACK') {
+        const startOffsets = [0, 13, 26, 39];
+        const startOffset = startOffsets[seatIdx % 4];
+        const absIdx = (startOffset + pos) % 52;
+        return TRACK_COORDS_52[absIdx];
+    } else if (state === 'STRETCH') {
+        const stretchPaths = [
+            [{r:7, c:1}, {r:7, c:2}, {r:7, c:3}, {r:7, c:4}, {r:7, c:5}],  // Red (Bottom-Left)
+            [{r:13, c:7}, {r:12, c:7}, {r:11, c:7}, {r:10, c:7}, {r:9, c:7}], // Blue (Bottom-Right)
+            [{r:7, c:13}, {r:7, c:12}, {r:7, c:11}, {r:7, c:10}, {r:7, c:9}], // Yellow (Top-Right)
+            [{r:1, c:7}, {r:2, c:7}, {r:3, c:7}, {r:4, c:7}, {r:5, c:7}]   // Green (Top-Left)
+        ];
+        const path = stretchPaths[seatIdx % 4];
+        return path[Math.min(pos, path.length - 1)];
+    }
+    return { r: 7, c: 7 };
 }
 
 function renderLudoBoard(state, validMovesInfo) {
@@ -93,13 +169,13 @@ function renderLudoBoard(state, validMovesInfo) {
     ctx.fillRect(0, 0, width, height);
 
     const playerCount = state.player_count || 4;
-    const totalArms = state.total_arms || playerCount;
+    const totalArms = state.total_arms || 4;
     const tokenClickTargets = [];
 
-    // Check token movements for step-hopping animation triggers
     detectTokenMovement(state);
 
-    if (totalArms === 4) {
+    // Render full 15x15 board for 2 or 4 players
+    if (totalArms === 4 || playerCount <= 4) {
         renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, tokenClickTargets);
     } else {
         renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, validMovesInfo, tokenClickTargets);
@@ -132,13 +208,10 @@ function detectTokenMovement(state) {
 
             if (prev) {
                 if (prev.state === 'TRACK' && token.state === 'YARD') {
-                    // Token was captured!
                     playLudoSound('capture');
                 } else if (token.state === 'HOME' && prev.state !== 'HOME') {
-                    // Token reached HOME!
                     playLudoSound('home');
                 } else if (token.pos > prev.pos && token.state === prev.state) {
-                    // Token moved forward! Play step sound
                     playLudoSound('step');
                 }
             }
@@ -152,11 +225,6 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
     const grid = 15;
     const cell = size / grid;
 
-    // Authentic Ludo King Colors:
-    // Green (Top-Left: 0..5, 0..5)
-    // Yellow (Top-Right: 0..5, 9..14)
-    // Blue (Bottom-Right: 9..14, 9..14)
-    // Red (Bottom-Left: 9..14, 0..5)
     const LUDO_COLORS = {
         red: '#ed1c24',
         blue: '#0072bc',
@@ -180,7 +248,6 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
     ];
 
     yards.forEach(y => {
-        // Base Yard Background
         ctx.fillStyle = y.color;
         ctx.fillRect(y.c * cell, y.r * cell, 6 * cell, 6 * cell);
 
@@ -214,13 +281,11 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(6 * cell, 6 * cell, 3 * cell, 3 * cell);
 
-    // 4 Triangles meeting in center
     drawTriangle(ctx, 6 * cell, 9 * cell, 9 * cell, 9 * cell, cx, cy, LUDO_COLORS.red);    // Bottom (Red)
     drawTriangle(ctx, 9 * cell, 6 * cell, 9 * cell, 9 * cell, cx, cy, LUDO_COLORS.blue);   // Right (Blue)
     drawTriangle(ctx, 6 * cell, 6 * cell, 9 * cell, 6 * cell, cx, cy, LUDO_COLORS.yellow); // Top (Yellow)
     drawTriangle(ctx, 6 * cell, 6 * cell, 6 * cell, 9 * cell, cx, cy, LUDO_COLORS.green);  // Left (Green)
 
-    // Center Trophy / Crown Podium Graphic
     ctx.font = 'bold 20px Outfit, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -254,7 +319,7 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
                 if (r === 6 && c === 13) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.yellow);
                 if (r === 1 && c === 6) drawSafeSquare(ctx, c, r, cell, LUDO_COLORS.green);
 
-                // Intermediate Star Safe Spots
+                // Safe Star Spots
                 if (r === 12 && c === 6) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
                 if (r === 8 && c === 12) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
                 if (r === 2 && c === 8) drawShieldStar(ctx, (c + 0.5) * cell, (r + 0.5) * cell, cell * 0.38, '#f59e0b');
@@ -269,7 +334,22 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
     drawArrow(ctx, (7.5) * cell, (0.5) * cell, 'DOWN', LUDO_COLORS.yellow, cell);
     drawArrow(ctx, (0.5) * cell, (7.5) * cell, 'RIGHT', LUDO_COLORS.green, cell);
 
-    // Render Player Tokens
+    // Group Occupants per Cell for Stacked Offsets
+    const cellOccupants = {};
+    state.players.forEach(p => {
+        p.tokens.forEach(token => {
+            let key = '';
+            if (token.state === 'YARD') key = `YARD_${p.seat_index}_${token.id}`;
+            else if (token.state === 'HOME') key = `HOME_${p.seat_index}_${token.id}`;
+            else {
+                const posCoords = getStandardGridCoords(p.seat_index, token.state, token.pos);
+                key = `${posCoords.r}_${posCoords.c}`;
+            }
+            if (!cellOccupants[key]) cellOccupants[key] = [];
+            cellOccupants[key].push({ player: p, token: token });
+        });
+    });
+
     const validTokenIds = (validMovesInfo && validMovesInfo.valid_token_ids) ? validMovesInfo.valid_token_ids : [];
     const pulsingScale = 1 + Math.sin(Date.now() / 150) * 0.12;
 
@@ -295,12 +375,25 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
                 const gridPos = getStandardGridCoords(p.seat_index, token.state, token.pos);
                 tx = (gridPos.c + 0.5) * cell;
                 ty = (gridPos.r + 0.5) * cell;
+
+                // Stack offset if multiple tokens on same cell
+                const key = `${gridPos.r}_${gridPos.c}`;
+                const occupants = cellOccupants[key] || [];
+                if (occupants.length > 1) {
+                    const stackIdx = occupants.findIndex(item => item.player.id === p.id && item.token.id === token.id);
+                    if (stackIdx >= 0) {
+                        const angle = (stackIdx * 2 * Math.PI) / occupants.length;
+                        const offsetR = cell * 0.18;
+                        tx += Math.cos(angle) * offsetR;
+                        ty += Math.sin(angle) * offsetR;
+                    }
+                }
             }
 
             const isSelectable = (state.current_player_index === p.id && validTokenIds.includes(token.id) && p.id === clientSeatIndex);
             const tokenRadius = isSelectable ? (cell * 0.42 * pulsingScale) : (cell * 0.35);
 
-            // Token Base Drop Shadow
+            // Token Drop Shadow
             ctx.beginPath();
             ctx.arc(tx + 2, ty + 3, tokenRadius, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
@@ -324,9 +417,9 @@ function renderStandard4QuadrantLudo(ctx, width, height, state, validMovesInfo, 
             // Glowing Bouncing Ring for Legal Moves
             if (isSelectable) {
                 ctx.beginPath();
-                ctx.arc(tx, ty, tokenRadius * 1.35, 0, Math.PI * 2);
+                ctx.arc(tx, ty, tokenRadius * 1.4, 0, Math.PI * 2);
                 ctx.strokeStyle = '#fbbf24';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3.5;
                 ctx.stroke();
             }
 
@@ -349,7 +442,6 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
     const outerR = Math.min(width, height) / 2 - 40;
     const innerR = 70;
 
-    // Draw Central Home Polygon
     ctx.beginPath();
     for (let i = 0; i < totalArms; i++) {
         const a = (i * 2 * Math.PI) / totalArms - Math.PI / 2;
@@ -373,13 +465,11 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
 
     const validTokenIds = (validMovesInfo && validMovesInfo.valid_token_ids) ? validMovesInfo.valid_token_ids : [];
 
-    // Render Arms & Base Yards
     state.players.forEach(p => {
         const angle = (p.seat_index * 2 * Math.PI) / totalArms - Math.PI / 2;
         const yardX = cx + Math.cos(angle) * outerR;
         const yardY = cy + Math.sin(angle) * outerR;
 
-        // Base Yard Circle
         ctx.beginPath();
         ctx.arc(yardX, yardY, 36, 0, Math.PI * 2);
         ctx.fillStyle = getColorHex(p.color);
@@ -394,7 +484,6 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
         ctx.font = 'bold 12px Outfit, sans-serif';
         ctx.fillText(p.name, yardX, yardY - 44);
 
-        // Home Stretch Line
         ctx.beginPath();
         ctx.moveTo(yardX, yardY);
         ctx.lineTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
@@ -402,7 +491,6 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
         ctx.lineWidth = 5;
         ctx.stroke();
 
-        // Render Tokens
         p.tokens.forEach((token, tIdx) => {
             const offsetAngle = (tIdx * Math.PI / 2);
             let tx = yardX + Math.cos(offsetAngle) * 16;
@@ -449,40 +537,6 @@ function renderPolygonalLudo(ctx, cx, cy, width, height, totalArms, state, valid
             });
         });
     });
-}
-
-function getStandardGridCoords(seatIdx, state, pos) {
-    const TRACK_COORDS = [
-        {r:6, c:1}, {r:6, c:2}, {r:6, c:3}, {r:6, c:4}, {r:6, c:5},
-        {r:5, c:6}, {r:4, c:6}, {r:3, c:6}, {r:2, c:6}, {r:1, c:6}, {r:0, c:6},
-        {r:0, c:7}, {r:0, c:8},
-        {r:1, c:8}, {r:2, c:8}, {r:3, c:8}, {r:4, c:8}, {r:5, c:8},
-        {r:6, c:9}, {r:6, c:10}, {r:6, c:11}, {r:6, c:12}, {r:6, c:13}, {r:6, c:14},
-        {r:7, c:14}, {r:8, c:14},
-        {r:8, c:13}, {r:8, c:12}, {r:8, c:11}, {r:8, c:10}, {r:8, c:9},
-        {r:9, c:8}, {r:10, c:8}, {r:11, c:8}, {r:12, c:8}, {r:13, c:8}, {r:14, c:8},
-        {r:14, c:7}, {r:14, c:6},
-        {r:13, c:6}, {r:12, c:6}, {r:11, c:6}, {r:10, c:6}, {r:9, c:6},
-        {r:8, c:5}, {r:8, c:4}, {r:8, c:3}, {r:8, c:2}, {r:8, c:1}, {r:8, c:0},
-        {r:7, c:0}, {r:6, c:0}
-    ];
-
-    if (state === 'TRACK') {
-        const startOffsets = [44, 31, 18, 5];
-        const startOffset = startOffsets[seatIdx % 4];
-        const absIdx = (startOffset + Math.round((pos * 52) / 24)) % TRACK_COORDS.length;
-        return TRACK_COORDS[absIdx];
-    } else if (state === 'STRETCH') {
-        const stretchPaths = [
-            [{r:13, c:7}, {r:12, c:7}, {r:11, c:7}, {r:10, c:7}, {r:9, c:7}, {r:8, c:7}], // Red (Bottom-Left)
-            [{r:7, c:13}, {r:7, c:12}, {r:7, c:11}, {r:7, c:10}, {r:7, c:9}, {r:7, c:8}],  // Blue (Bottom-Right)
-            [{r:1, c:7}, {r:2, c:7}, {r:3, c:7}, {r:4, c:7}, {r:5, c:7}, {r:6, c:7}],     // Yellow (Top-Right)
-            [{r:7, c:1}, {r:7, c:2}, {r:7, c:3}, {r:7, c:4}, {r:7, c:5}, {r:7, c:6}]      // Green (Top-Left)
-        ];
-        const path = stretchPaths[seatIdx % 4];
-        return path[Math.min(pos, path.length - 1)];
-    }
-    return { r: 7, c: 7 };
 }
 
 function drawTriangle(ctx, x1, y1, x2, y2, x3, y3, color) {

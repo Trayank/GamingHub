@@ -1,9 +1,49 @@
 {% extends "rooms/base.html" %}
 
-{% block title %}GamingHub - Multiplayer Board & Card Games{% endblock %}
+{% block title %}Ludo King - Online Multiplayer Board Games{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto w-full my-auto space-y-10">
+<style>
+/* Ludo King Custom 3D & Bevel Styling */
+.ludo-modal-container {
+    background: linear-gradient(180deg, #0d1b4b 0%, #080f2d 100%);
+    border: 5px solid #f59e0b;
+    box-shadow: inset 0 0 15px rgba(251, 191, 36, 0.4), 0 0 40px rgba(0, 0, 0, 0.8);
+    border-radius: 2rem;
+}
+.ludo-inner-panel {
+    background: #060b20;
+    border: 1.5px solid rgba(245, 158, 11, 0.25);
+    border-radius: 1.25rem;
+}
+.pin-glow-blue { filter: drop-shadow(0 0 8px #00A3FF); }
+.pin-glow-red { filter: drop-shadow(0 0 8px #FF2E2E); }
+.pin-glow-green { filter: drop-shadow(0 0 8px #00E052); }
+.pin-glow-yellow { filter: drop-shadow(0 0 8px #FFD600); }
+
+.btn-3d-play {
+    background: linear-gradient(180deg, #facc15 0%, #ca8a04 50%, #854d0e 100%);
+    box-shadow: 0 6px 0 #713f12, 0 10px 20px rgba(0, 0, 0, 0.5);
+    border: 2px solid #fef08a;
+    transition: all 0.1s ease;
+}
+.btn-3d-play:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #713f12, 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.btn-3d-back {
+    background: linear-gradient(180deg, #eab308 0%, #ca8a04 100%);
+    box-shadow: 0 4px 0 #854d0e;
+    border: 2px solid #fef08a;
+}
+.btn-3d-back:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #854d0e;
+}
+</style>
+
+<div class="max-w-6xl mx-auto w-full my-auto space-y-8">
     {% if error_msg %}
     <div class="glass-panel border-red-500/30 bg-red-500/10 text-red-200 p-4 rounded-xl flex justify-between items-center max-w-2xl mx-auto shadow-lg">
         <span class="text-sm font-semibold">⚠️ {{ error_msg }}</span>
@@ -11,86 +51,122 @@
     </div>
     {% endif %}
 
-    <!-- Hero Header -->
-    <div class="text-center space-y-3">
-        <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm font-medium">
-            <span>✨ Real-Time Server-Authoritative Gameplay</span>
+    <!-- Top HUD Bar (Ludo King Style) -->
+    <div class="glass-panel p-3 sm:p-4 rounded-2xl flex items-center justify-between border border-amber-500/20 shadow-xl bg-slate-950/80">
+        <!-- Left: Player Avatar, Nickname & Level Badge -->
+        <div class="flex items-center space-x-3">
+            <button onclick="toggleProfileDrawer()" class="relative group">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 p-0.5 shadow-lg">
+                    <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-2xl">
+                        {{ profile.avatar_emoji|default:"🧙" }}
+                    </div>
+                </div>
+                <span class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md border border-slate-900">
+                    LVL 12
+                </span>
+            </button>
+            <div class="text-left">
+                <div class="text-sm font-black text-white tracking-wide flex items-center space-x-1.5">
+                    <span>{{ profile.display_name|default:"Anshu Nag" }}</span>
+                    <span class="text-xs text-amber-400">👑</span>
+                </div>
+                <div class="text-[11px] text-slate-400 font-semibold flex items-center space-x-2">
+                    <span>Win Rate: {{ profile.win_rate|default:0 }}%</span>
+                    <span>•</span>
+                    <span class="text-indigo-400">ELO: {{ profile.rating_elo|default:1200 }}</span>
+                </div>
+            </div>
         </div>
-        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
-            Play Ludo, Chess & Cards<br>
-            <span class="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">With Friends Online</span>
-        </h1>
-        <p class="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto">
-            Create private rooms, choose custom variants, share a 6-character room code, and play seamlessly across desktop & mobile.
-        </p>
+
+        <!-- Right: Coins Wallet, More Coins Button & Settings -->
+        <div class="flex items-center space-x-3">
+            <!-- Coin Wallet -->
+            <div class="flex items-center bg-slate-900/90 border border-amber-500/40 rounded-full pl-3 pr-1 py-1 space-x-2 shadow-inner">
+                <span class="text-amber-400 text-base">🪙</span>
+                <span id="userCoinBalance" class="text-sm font-extrabold text-white font-mono">2,250</span>
+                <button class="w-6 h-6 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs flex items-center justify-center hover:scale-105 transition shadow">
+                    +
+                </button>
+            </div>
+
+            <!-- Settings Gear Button -->
+            <button onclick="toggleProfileDrawer()" class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition">
+                ⚙️
+            </button>
+        </div>
     </div>
 
-    <!-- Game Catalog Grid -->
+    <!-- Main Menu Cards Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Ludo Card -->
-        <div onclick="openSetupModal('LUDO')" class="glass-panel p-6 rounded-2xl border border-slate-700/80 hover:border-indigo-500/50 transition cursor-pointer group flex flex-col justify-between relative overflow-hidden">
-            <div class="absolute -right-6 -top-6 w-28 h-28 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition"></div>
+        <!-- ONLINE MULTIPLAYER CARD (Main Highlight) -->
+        <div onclick="openLudoModal()" class="glass-panel p-6 rounded-3xl border-2 border-indigo-500/40 hover:border-amber-400/80 transition-all duration-300 cursor-pointer group flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-indigo-950/40 to-slate-900/80 shadow-2xl hover:scale-[1.02]">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl group-hover:bg-amber-400/30 transition"></div>
             <div>
-                <div class="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                    🎲
+                <div class="flex justify-between items-start mb-4">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 border border-indigo-300/30 flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+                        🌐
+                    </div>
+                    <span class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold flex items-center space-x-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span>● Players: 27,446</span>
+                    </span>
                 </div>
-                <h3 class="text-xl font-bold text-white mb-1">Ludo</h3>
-                <span class="inline-block px-2.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-xs font-semibold mb-3">2 – 10 Players</span>
-                <p class="text-xs text-slate-400 leading-relaxed">
-                    Scalable geometric track generator. Dynamic 2 to 10 players, safe stars, captures, and optional blockades.
+                <h3 class="text-2xl font-black text-white tracking-wide mb-1">ONLINE MULTIPLAYER</h3>
+                <p class="text-xs text-slate-300 font-medium leading-relaxed">
+                    Play Classic 15x15 Ludo with live online opponents. Choose colors, set player count (2P / 4P), and wager coins!
                 </p>
             </div>
-            <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-indigo-400 group-hover:text-indigo-300">
-                <span>Configure Game & Create</span>
-                <span>→</span>
+            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-black text-amber-400 group-hover:text-yellow-300">
+                <span>SELECT STAKE & MATCH</span>
+                <span class="text-base group-hover:translate-x-1 transition-transform">➔</span>
             </div>
         </div>
 
-        <!-- Chess Card -->
-        <div onclick="openSetupModal('CHESS')" class="glass-panel p-6 rounded-2xl border border-slate-700/80 hover:border-purple-500/50 transition cursor-pointer group flex flex-col justify-between relative overflow-hidden">
-            <div class="absolute -right-6 -top-6 w-28 h-28 bg-purple-500/10 rounded-full blur-xl group-hover:bg-purple-500/20 transition"></div>
+        <!-- VS COMPUTER CARD -->
+        <div onclick="openLudoModal()" class="glass-panel p-6 rounded-3xl border border-slate-700/80 hover:border-purple-500/50 transition cursor-pointer group flex flex-col justify-between relative overflow-hidden shadow-xl">
             <div>
-                <div class="w-12 h-12 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                    ♟️
+                <div class="w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                    🤖
                 </div>
-                <h3 class="text-xl font-bold text-white mb-1">Chess Variants</h3>
-                <span class="inline-block px-2.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 text-xs font-semibold mb-3">Standard, 4-Way & Bughouse</span>
+                <h3 class="text-xl font-bold text-white mb-1">VS COMPUTER</h3>
+                <span class="inline-block px-2.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 text-xs font-semibold mb-3">Offline AI Bot</span>
                 <p class="text-xs text-slate-400 leading-relaxed">
-                    FIDE Standard 2-player chess, 14x14 4-Way chess cross board, and 4-player Bughouse with reserve drops.
+                    Practice your moves offline against smart AI bots. Unlimited free matches.
                 </p>
             </div>
             <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-purple-400 group-hover:text-purple-300">
-                <span>Configure Game & Create</span>
+                <span>Start Practice Match</span>
                 <span>→</span>
             </div>
         </div>
 
-        <!-- Card Games Card -->
-        <div onclick="openSetupModal('CARDS')" class="glass-panel p-6 rounded-2xl border border-slate-700/80 hover:border-pink-500/50 transition cursor-pointer group flex flex-col justify-between relative overflow-hidden">
-            <div class="absolute -right-6 -top-6 w-28 h-28 bg-pink-500/10 rounded-full blur-xl group-hover:bg-pink-500/20 transition"></div>
+        <!-- CHESS & CARDS CARD -->
+        <div onclick="openSetupModal('CHESS')" class="glass-panel p-6 rounded-3xl border border-slate-700/80 hover:border-pink-500/50 transition cursor-pointer group flex flex-col justify-between relative overflow-hidden shadow-xl">
             <div>
-                <div class="w-12 h-12 rounded-2xl bg-pink-600/20 border border-pink-500/30 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                    🃏
+                <div class="w-14 h-14 rounded-2xl bg-pink-600/20 border border-pink-500/30 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                    ♟️
                 </div>
-                <h3 class="text-xl font-bold text-white mb-1">Card Suite</h3>
-                <span class="inline-block px-2.5 py-0.5 rounded-md bg-pink-500/20 text-pink-300 text-xs font-semibold mb-3">Uno, Poker, Blackjack, Rummy</span>
+                <h3 class="text-xl font-bold text-white mb-1">Chess & Card Suite</h3>
+                <span class="inline-block px-2.5 py-0.5 rounded-md bg-pink-500/20 text-pink-300 text-xs font-semibold mb-3">Standard, 4-Way & Cards</span>
                 <p class="text-xs text-slate-400 leading-relaxed">
-                    Multiplayer Uno color matching, Texas Hold'em Poker, Dealer Blackjack, and 13-Card Rummy.
+                    FIDE Standard 2-player chess, 4-Way chess cross board, Uno, and Poker.
                 </p>
             </div>
             <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-pink-400 group-hover:text-pink-300">
-                <span>Configure Game & Create</span>
+                <span>Explore Other Games</span>
                 <span>→</span>
             </div>
         </div>
     </div>
 
-    <!-- Quick Join Room Box -->
-    <div class="glass-panel p-6 sm:p-8 rounded-2xl max-w-xl mx-auto space-y-4">
-        <h3 class="text-lg font-bold text-white text-center">Have a Room Code?</h3>
+    <!-- Quick Join Room Code Box -->
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-xl mx-auto space-y-4 border border-slate-800 shadow-xl">
+        <h3 class="text-base font-bold text-white text-center flex items-center justify-center space-x-2">
+            <span>🔑 Have a Room Code?</span>
+        </h3>
         <form action="{% url 'join_room' %}" method="POST" class="flex flex-col sm:flex-row gap-3">
             {% csrf_token %}
-            <input type="text" name="room_code" placeholder="ENTER 6-CHAR CODE" uppercase maxlength="6" required class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white uppercase placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <input type="text" name="room_code" placeholder="ENTER 6-CHAR CODE" uppercase maxlength="6" required class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white uppercase placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500">
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition">
                 Join Lobby →
             </button>
@@ -98,7 +174,133 @@
     </div>
 </div>
 
-<!-- Interactive Setup Modal -->
+<!-- LUDO KING GAME SETUP POPUP MODAL -->
+<div id="ludoKingModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="ludo-modal-container max-w-md w-full p-6 relative space-y-5 text-white">
+        
+        <!-- Modal Header -->
+        <div class="text-center pb-2">
+            <h2 class="text-2xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 uppercase drop-shadow">
+                ONLINE MULTIPLAYER
+            </h2>
+        </div>
+
+        <form action="{% url 'create_room' %}" method="POST" id="ludoModalForm">
+            {% csrf_token %}
+            <input type="hidden" name="game_type" value="LUDO">
+            <input type="hidden" name="chosen_color" id="selectedColorInput" value="blue">
+            <input type="hidden" name="max_players" id="selectedPlayersInput" value="2">
+            <input type="hidden" name="variant" value="4P">
+            <input type="hidden" name="stake_amount" id="selectedStakeInput" value="1000">
+
+            <div class="space-y-4">
+                <!-- SECTION 1: SELECT YOUR COLOR -->
+                <div class="ludo-inner-panel p-4 space-y-3">
+                    <h3 class="text-xs font-black uppercase text-amber-400 tracking-wider text-center">
+                        SELECT YOUR COLOR
+                    </h3>
+
+                    <div class="grid grid-cols-4 gap-3">
+                        <!-- Blue Pin -->
+                        <button type="button" onclick="selectColorPin('blue')" id="pin_btn_blue" class="flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-amber-400 bg-blue-900/40">
+                            <div class="text-3xl pin-glow-blue">📍</div>
+                            <div id="ring_blue" class="w-6 h-6 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-white text-xs font-bold shadow">
+                                ✓
+                            </div>
+                        </button>
+
+                        <!-- Red Pin -->
+                        <button type="button" onclick="selectColorPin('red')" id="pin_btn_red" class="flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-transparent opacity-60 hover:opacity-100">
+                            <div class="text-3xl pin-glow-red">📍</div>
+                            <div id="ring_red" class="w-6 h-6 rounded-full border-2 border-slate-400 bg-slate-800 flex items-center justify-center text-white text-xs font-bold">
+                            </div>
+                        </button>
+
+                        <!-- Green Pin -->
+                        <button type="button" onclick="selectColorPin('green')" id="pin_btn_green" class="flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-transparent opacity-60 hover:opacity-100">
+                            <div class="text-3xl pin-glow-green">📍</div>
+                            <div id="ring_green" class="w-6 h-6 rounded-full border-2 border-slate-400 bg-slate-800 flex items-center justify-center text-white text-xs font-bold">
+                            </div>
+                        </button>
+
+                        <!-- Yellow Pin -->
+                        <button type="button" onclick="selectColorPin('yellow')" id="pin_btn_yellow" class="flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-transparent opacity-60 hover:opacity-100">
+                            <div class="text-3xl pin-glow-yellow">📍</div>
+                            <div id="ring_yellow" class="w-6 h-6 rounded-full border-2 border-slate-400 bg-slate-800 flex items-center justify-center text-white text-xs font-bold">
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: SELECT PLAYER -->
+                <div class="ludo-inner-panel p-4 space-y-3">
+                    <h3 class="text-xs font-black uppercase text-amber-400 tracking-wider text-center">
+                        SELECT PLAYER
+                    </h3>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" onclick="selectPlayersCount(2)" id="player_btn_2" class="py-2.5 px-4 rounded-xl border-2 border-amber-400 bg-amber-500/20 font-black text-xs text-amber-300 flex items-center justify-center space-x-2 shadow">
+                            <span class="w-4 h-4 rounded-full border-2 border-amber-300 bg-amber-400 flex items-center justify-center text-[10px] text-slate-950 font-bold">✓</span>
+                            <span>2 PLAYERS</span>
+                        </button>
+
+                        <button type="button" onclick="selectPlayersCount(4)" id="player_btn_4" class="py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 font-black text-xs text-slate-400 flex items-center justify-center space-x-2 opacity-60 hover:opacity-100">
+                            <span class="w-4 h-4 rounded-full border-2 border-slate-500 bg-slate-800"></span>
+                            <span>4 PLAYERS</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: SELECT GAME (Stake / Coin Selector) -->
+                <div class="ludo-inner-panel p-4 text-center space-y-3">
+                    <h3 class="text-xs font-black uppercase text-amber-400 tracking-wider">
+                        SELECT GAME STAKE
+                    </h3>
+
+                    <div class="flex items-center justify-between bg-slate-950/80 p-3 rounded-2xl border border-amber-500/30">
+                        <!-- Step Down [-] -->
+                        <button type="button" onclick="adjustStake(-1)" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 font-extrabold text-lg text-white flex items-center justify-center shadow active:scale-95">
+                            -
+                        </button>
+
+                        <!-- Center Coin & Win Display -->
+                        <div class="space-y-0.5">
+                            <div class="flex items-center justify-center space-x-1.5 text-2xl font-black text-yellow-400">
+                                <span>🪙</span>
+                                <span id="winAmountDisplay" class="font-mono">WIN 1,900</span>
+                            </div>
+                            <div class="text-[11px] font-bold text-slate-400 flex items-center justify-center space-x-2">
+                                <span>Entry: <strong id="entryAmountDisplay" class="text-white">1,000</strong></span>
+                                <span>•</span>
+                                <span class="text-emerald-400">● Players: 16,366</span>
+                            </div>
+                        </div>
+
+                        <!-- Step Up [+] -->
+                        <button type="button" onclick="adjustStake(1)" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 font-extrabold text-lg text-white flex items-center justify-center shadow active:scale-95">
+                            +
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTTOM CONTROLS -->
+            <div class="flex items-center justify-between pt-2">
+                <!-- Yellow Circular Back Arrow Button -->
+                <button type="button" onclick="closeLudoModal()" class="btn-3d-back w-12 h-12 rounded-full text-slate-950 font-black text-xl flex items-center justify-center">
+                    ↶
+                </button>
+
+                <!-- Glossy 3D PLAY Button -->
+                <button type="submit" class="btn-3d-play flex-1 ml-4 py-3.5 rounded-2xl font-black text-base text-slate-950 tracking-wider uppercase flex items-center justify-center space-x-2">
+                    <span>🚀 PLAY</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Generic Setup Modal for Chess & Cards -->
 <div id="gameSetupModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
     <div class="glass-panel max-w-lg w-full p-6 sm:p-8 rounded-2xl shadow-2xl relative space-y-6">
         <div class="flex justify-between items-center border-b border-slate-800 pb-4">
@@ -109,71 +311,14 @@
         <form action="{% url 'create_room' %}" method="POST" id="modalCreateForm" class="space-y-5">
             {% csrf_token %}
             <input type="hidden" name="game_type" id="modalGameType">
-            <input type="hidden" name="rules_config" id="modalRulesConfig" value="{}">
 
-            <!-- Ludo Specific Options -->
-            <div id="ludoOptions" class="hidden space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Max Players (2 - 10)</label>
-                    <select name="max_players" id="ludoMaxPlayers" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                        <option value="4" selected>4 Players (Standard Cross)</option>
-                        <option value="2">2 Players (Opposite Arms)</option>
-                        <option value="3">3 Players</option>
-                        <option value="5">5 Players (Hexagonal)</option>
-                        <option value="6">6 Players (Hexagonal)</option>
-                        <option value="8">8 Players (Octagonal)</option>
-                        <option value="10">10 Players (Decagonal)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Game Mode</label>
-                    <select name="variant" id="ludoVariant" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                        <option value="4P">Free-for-All (Solo)</option>
-                        <option value="TEAM_2V2">Team Mode (2v2)</option>
-                        <option value="BLOCKADE">Blockade Stacking Rules</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Chess Specific Options -->
-            <div id="chessOptions" class="hidden space-y-4">
+            <div id="chessOptions" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Chess Variant</label>
-                    <select id="chessVariantSelect" onchange="syncChessVariant()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
+                    <select id="chessVariantSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
                         <option value="CHESS_STANDARD" data-max="2" data-var="standard">Standard Chess (2 Players)</option>
                         <option value="CHESS_4WAY" data-max="4" data-var="4way">4-Way Chess (4 Players / 14x14 Cross)</option>
                         <option value="CHESS_BUGHOUSE" data-max="4" data-var="bughouse">Bughouse / Double Chess (4 Players / 2v2)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Clock / Timer</label>
-                    <select id="chessClockSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                        <option value="30">30s per turn (Standard)</option>
-                        <option value="60">60s per turn (Rapid)</option>
-                        <option value="0">No Timer (Casual)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Cards Specific Options -->
-            <div id="cardOptions" class="hidden space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Card Game Type</label>
-                    <select id="cardGameSelect" onchange="syncCardGame()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                        <option value="CARD_UNO" data-max="4">Uno / Color Match (2-8 Players)</option>
-                        <option value="CARD_POKER" data-max="6">Texas Hold'em Poker (2-8 Players)</option>
-                        <option value="CARD_BLACKJACK" data-max="4">Blackjack (Dealer vs Players)</option>
-                        <option value="CARD_RUMMY" data-max="4">13-Card Rummy</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Max Players</label>
-                    <select id="cardMaxPlayers" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                        <option value="4" selected>4 Players</option>
-                        <option value="2">2 Players</option>
-                        <option value="3">3 Players</option>
-                        <option value="6">6 Players</option>
-                        <option value="8">8 Players</option>
                     </select>
                 </div>
             </div>
@@ -186,83 +331,86 @@
 </div>
 
 <script>
-let currentCategory = 'LUDO';
+let currentStakeIndex = 1;
+const STAKES = [500, 1000, 2500, 5000, 10000];
 
-function openSetupModal(category) {
-    currentCategory = category;
-    const modal = document.getElementById('gameSetupModal');
-    const title = document.getElementById('modalTitle');
-    const ludoOpts = document.getElementById('ludoOptions');
-    const chessOpts = document.getElementById('chessOptions');
-    const cardOpts = document.getElementById('cardOptions');
+function openLudoModal() {
+    document.getElementById('ludoKingModal').classList.remove('hidden');
+}
 
-    ludoOpts.classList.add('hidden');
-    chessOpts.classList.add('hidden');
-    cardOpts.classList.add('hidden');
+function closeLudoModal() {
+    document.getElementById('ludoKingModal').classList.add('hidden');
+}
 
-    if (category === 'LUDO') {
-        title.innerText = 'Configure Ludo Room';
-        ludoOpts.classList.remove('hidden');
-        document.getElementById('modalGameType').value = 'LUDO';
-    } else if (category === 'CHESS') {
-        title.innerText = 'Configure Chess Room';
-        chessOpts.classList.remove('hidden');
-        syncChessVariant();
-    } else if (category === 'CARDS') {
-        title.innerText = 'Configure Card Game Room';
-        cardOpts.classList.remove('hidden');
-        syncCardGame();
+function selectColorPin(color) {
+    document.getElementById('selectedColorInput').value = color;
+    const colors = ['blue', 'red', 'green', 'yellow'];
+    colors.forEach(c => {
+        const btn = document.getElementById(`pin_btn_${c}`);
+        const ring = document.getElementById(`ring_${c}`);
+        if (c === color) {
+            btn.className = `flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-amber-400 bg-${c}-900/40 opacity-100`;
+            ring.className = `w-6 h-6 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-white text-xs font-bold shadow`;
+            ring.innerText = '✓';
+        } else {
+            btn.className = `flex flex-col items-center space-y-2 p-2 rounded-xl border-2 transition border-transparent opacity-60 hover:opacity-100`;
+            ring.className = `w-6 h-6 rounded-full border-2 border-slate-400 bg-slate-800 flex items-center justify-center text-white text-xs font-bold`;
+            ring.innerText = '';
+        }
+    });
+}
+
+function selectPlayersCount(count) {
+    document.getElementById('selectedPlayersInput').value = count;
+    const btn2 = document.getElementById('player_btn_2');
+    const btn4 = document.getElementById('player_btn_4');
+
+    if (count === 2) {
+        btn2.className = 'py-2.5 px-4 rounded-xl border-2 border-amber-400 bg-amber-500/20 font-black text-xs text-amber-300 flex items-center justify-center space-x-2 shadow';
+        btn2.querySelector('span').className = 'w-4 h-4 rounded-full border-2 border-amber-300 bg-amber-400 flex items-center justify-center text-[10px] text-slate-950 font-bold';
+        btn2.querySelector('span').innerText = '✓';
+
+        btn4.className = 'py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 font-black text-xs text-slate-400 flex items-center justify-center space-x-2 opacity-60 hover:opacity-100';
+        btn4.querySelector('span').className = 'w-4 h-4 rounded-full border-2 border-slate-500 bg-slate-800';
+        btn4.querySelector('span').innerText = '';
+    } else {
+        btn4.className = 'py-2.5 px-4 rounded-xl border-2 border-amber-400 bg-amber-500/20 font-black text-xs text-amber-300 flex items-center justify-center space-x-2 shadow';
+        btn4.querySelector('span').className = 'w-4 h-4 rounded-full border-2 border-amber-300 bg-amber-400 flex items-center justify-center text-[10px] text-slate-950 font-bold';
+        btn4.querySelector('span').innerText = '✓';
+
+        btn2.className = 'py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 font-black text-xs text-slate-400 flex items-center justify-center space-x-2 opacity-60 hover:opacity-100';
+        btn2.querySelector('span').className = 'w-4 h-4 rounded-full border-2 border-slate-500 bg-slate-800';
+        btn2.querySelector('span').innerText = '';
     }
+    updateStakeDisplay();
+}
 
-    modal.classList.remove('hidden');
+function adjustStake(delta) {
+    currentStakeIndex = Math.max(0, Math.min(STAKES.length - 1, currentStakeIndex + delta));
+    updateStakeDisplay();
+}
+
+function updateStakeDisplay() {
+    const entry = STAKES[currentStakeIndex];
+    const pCount = parseInt(document.getElementById('selectedPlayersInput').value) || 2;
+    const win = Math.round(entry * pCount * 0.95);
+
+    document.getElementById('selectedStakeInput').value = entry;
+    document.getElementById('entryAmountDisplay').innerText = entry.toLocaleString();
+    document.getElementById('winAmountDisplay').innerText = `WIN ${win.toLocaleString()}`;
+}
+
+function openSetupModal(cat) {
+    document.getElementById('gameSetupModal').classList.remove('hidden');
+    document.getElementById('modalGameType').value = cat;
 }
 
 function closeSetupModal() {
     document.getElementById('gameSetupModal').classList.add('hidden');
 }
 
-function syncChessVariant() {
-    const sel = document.getElementById('chessVariantSelect');
-    const opt = sel.options[sel.selectedIndex];
-    document.getElementById('modalGameType').value = opt.value;
-    
-    // Create hidden inputs for max_players & variant
-    let maxInput = document.getElementById('dynamicMaxPlayers');
-    if (!maxInput) {
-        maxInput = document.createElement('input');
-        maxInput.type = 'hidden';
-        maxInput.name = 'max_players';
-        maxInput.id = 'dynamicMaxPlayers';
-        document.getElementById('modalCreateForm').appendChild(maxInput);
-    }
-    maxInput.value = opt.getAttribute('data-max');
-
-    let varInput = document.getElementById('dynamicVariant');
-    if (!varInput) {
-        varInput = document.createElement('input');
-        varInput.type = 'hidden';
-        varInput.name = 'variant';
-        varInput.id = 'dynamicVariant';
-        document.getElementById('modalCreateForm').appendChild(varInput);
-    }
-    varInput.value = opt.getAttribute('data-var');
-}
-
-function syncCardGame() {
-    const sel = document.getElementById('cardGameSelect');
-    const opt = sel.options[sel.selectedIndex];
-    document.getElementById('modalGameType').value = opt.value;
-    
-    const maxSel = document.getElementById('cardMaxPlayers');
-    let maxInput = document.getElementById('dynamicMaxPlayers');
-    if (!maxInput) {
-        maxInput = document.createElement('input');
-        maxInput.type = 'hidden';
-        maxInput.name = 'max_players';
-        maxInput.id = 'dynamicMaxPlayers';
-        document.getElementById('modalCreateForm').appendChild(maxInput);
-    }
-    maxInput.value = maxSel.value;
-}
+document.addEventListener('DOMContentLoaded', () => {
+    updateStakeDisplay();
+});
 </script>
 {% endblock %}

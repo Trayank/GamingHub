@@ -210,6 +210,19 @@ function renderGame(data) {
                 }
             }
 
+            // Auto-Move Automation: If exactly 1 token has a legal move on client's turn, hop it forward automatically
+            if (isMyTurn && state.phase === 'WAITING_FOR_MOVE' && data.client_valid_moves) {
+                const validIds = data.client_valid_moves.valid_token_ids || [];
+                if (validIds.length === 1) {
+                    if (!window._autoMoveTimeout) {
+                        window._autoMoveTimeout = setTimeout(() => {
+                            window._autoMoveTimeout = null;
+                            sendMovePiece({ type: 'move_piece', token_id: validIds[0] });
+                        }, 400);
+                    }
+                }
+            }
+
             if (state.phase === 'GAME_OVER') {
                 showVictoryPodiumModal(state);
             }

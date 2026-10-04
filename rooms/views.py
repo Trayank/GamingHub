@@ -96,6 +96,7 @@ def create_room_view(request):
         except ValueError:
             max_players = 4
 
+        chosen_color = request.POST.get('chosen_color', '').strip().lower()
         raw_rules = request.POST.get('rules_config', '{}')
         rules_config = {}
         if raw_rules:
@@ -103,6 +104,8 @@ def create_room_view(request):
                 rules_config = json.loads(raw_rules) if isinstance(raw_rules, str) else raw_rules
             except Exception:
                 rules_config = {}
+        if chosen_color:
+            rules_config['host_color'] = chosen_color
 
         try:
             room = GameRoom.objects.create(
@@ -197,6 +200,8 @@ def room_detail_view(request, room_code, game_type=None):
                 break
         colors = ['red', 'blue', 'yellow', 'green', 'purple', 'orange', 'cyan', 'pink']
         color = colors[seat_index % len(colors)]
+        if is_host and room.rules_config and room.rules_config.get('host_color'):
+            color = room.rules_config['host_color']
         player_session = PlayerSession.objects.create(
             room=room,
             session_key=session_key,
