@@ -4,6 +4,8 @@ let currentRoomData = null;
 let clientSeatIndex = -1;
 
 function initWebSocket() {
+    startLobbyPolling();
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = `${protocol}//${window.location.host}/ws/room/${ROOM_CODE}/`;
     
@@ -261,18 +263,171 @@ function renderGame(data) {
     }
 }
 
-// WebSocket Sender Helpers
+// WebSocket Sender Helpers & HTTP Polling Fallback
+function getCsrfToken() {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue || '';
+}
+
+let statusPollingInterval = null;
+
+function startLobbyPolling() {
+    if (statusPollingInterval) clearInterval(statusPollingInterval);
+    fetchStatusAndUpdateLobby();
+    statusPollingInterval = setInterval(fetchStatusAndUpdateLobby, 2000);
+}
+
+function fetchStatusAndUpdateLobby() {
+    if (typeof ROOM_CODE === 'undefined' || !ROOM_CODE) return;
+    fetch(`/room/${ROOM_CODE}/status/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'in_progress' || data.status === 'PLAYING') {
+            const lobbyView = document.getElementById('lobbyView');
+            const gameView = document.getElementById('gameView');
+            if (lobbyView && gameView && !lobbyView.classList.contains('hidden')) {
+                lobbyView.classList.add('hidden');
+                gameView.classList.remove('hidden');
+            }
+        }
+        updateLobbyUIFromPolling(data);
+    })
+    .catch(err => console.error('Status polling error:', err));
+}
+
+function updateLobbyUIFromPolling(data) {
+    if (!data || !data.players) return;
+    const grid = document.getElementById('playerSeatsGrid');
+    if (!grid) return;
+
+    // Update Connected Players Badge
+    const countBadge = document.getElementById('playerCountBadge');
+    if (countBadge) {
+        countBadge.innerText = `Connected Players (${data.player_count}/${data.max_players})`;
+    }
+
+    // Host Badge & Controls
+    const hostBadge = document.getElementById('hostBadge');
+    const hostControls = document.getElementById('hostControls');
+    const startBtn = document.getElementById('startGameBtn');
+    const toggleReadyBtn = document.getElementById('toggleReadyBtn');
+
+    if (data.is_current_user_host) {
+        if (hostBadge) hostBadge.classList.remove('hidden');
+        if (hostControls) hostControls.classList.remove('hidden');
+        if (startBtn) {
+            startBtn.disabled = !data.can_start;
+            startBtn.className = data.can_start
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+                : "bg-slate-800 text-slate-500 border border-slate-700 font-bold py-2.5 px-8 rounded-xl cursor-not-allowed opacity-60";
+            startBtn.innerText = data.can_start ? "🚀 Start Game" : `Waiting for Ready (${data.player_count}/${data.max_players})`;
+        }
+    } else {
+        if (hostBadge) hostBadge.classList.add('hidden');
+        if (hostControls) hostControls.classList.remove('hidden');
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.className = "bg-slate-800 text-slate-400 border border-slate-700 font-semibold py-2.5 px-6 rounded-xl cursor-not-allowed opacity-80";
+            startBtn.innerText = "⏳ Waiting for host to start game...";
+        }
+    }
+
+    // Render Player Cards Grid
+    grid.innerHTML = '';
+    data.players.forEach((player, idx) => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-4 rounded-xl border border-slate-700 flex flex-col justify-between space-y-3';
+        const isMe = (player.session_key === RECONNECT_TOKEN || player.session_key === SESSION_KEY);
+
+        if (isMe && toggleReadyBtn) {
+            toggleReadyBtn.innerText = player.is_ready ? '✓ Ready (Click to Unready)' : '⏳ Set Ready';
+            toggleReadyBtn.className = player.is_ready 
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition'
+                : 'bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition';
+        }
+
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <span class="text-xs font-bold text-slate-400">Seat #${idx + 1}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${player.is_ready ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                    ${player.is_ready ? '✓ Ready' : '⏳ Waiting'}
+                </span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
+                    ${player.avatar || '🧙'}
+                </div>
+                <div>
+                    <div class="font-bold text-white flex items-center space-x-1">
+                        <span>${player.name}</span>
+                        ${isMe ? '<span class="text-xs text-indigo-400 font-normal">(You)</span>' : ''}
+                        ${player.is_host ? '<span class="text-amber-400 text-xs font-bold">👑 Host</span>' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
 function sendSelectSeat(seatIndex = null) {
     const color = document.getElementById('colorPicker').value;
-    socket.send(jsonPayload('select_seat', { seat_index: seatIndex, color: color }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(jsonPayload('select_seat', { seat_index: seatIndex, color: color }));
+    }
 }
 
 function sendToggleReady() {
-    socket.send(jsonPayload('toggle_ready'));
+    fetch(`/room/${ROOM_CODE}/toggle-ready/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(() => fetchStatusAndUpdateLobby())
+    .catch(err => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(jsonPayload('toggle_ready'));
+        }
+    });
 }
 
 function sendStartGame() {
-    socket.send(jsonPayload('start_game'));
+    fetch(`/room/${ROOM_CODE}/start/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            fetchStatusAndUpdateLobby();
+        } else {
+            showError(data.error || 'Failed to start game');
+        }
+    })
+    .catch(err => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(jsonPayload('start_game'));
+        }
+    });
 }
 
 function sendKickPlayer(seatIndex) {

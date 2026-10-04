@@ -148,3 +148,6 @@ class MatchHistory(models.Model):
 
     def __str__(self):
         return f"Match {self.room_code} - {self.game_type} ({self.ended_at})"
+
+# Model alias for backward compatibility
+RoomPlayer = PlayerSession
